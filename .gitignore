@@ -1,0 +1,67 @@
+# .NET build outputs
+bin/
+obj/
+artifacts/
+out/
+publish/
+
+# Test results and coverage
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Task
+.task/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+Configuration/appsettings.Local.json
+Configuration/appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*/
+

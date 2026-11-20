@@ -1,0 +1,64 @@
+version: "3"
+
+vars:
+  PROJECT: SampleServer.csproj
+
+tasks:
+  default:
+    desc: Build the project
+    cmds:
+      - task: build
+
+  restore:
+    desc: Restore project dependencies
+    cmds:
+      - dotnet restore {{.PROJECT}}
+
+  build:
+    desc: Restore and build the project
+    deps:
+      - restore
+    cmds:
+      - dotnet build {{.PROJECT}} --no-restore
+
+  run:
+    desc: Run the server
+    cmds:
+      - dotnet run --project {{.PROJECT}}
+
+  watch:
+    desc: Run the server with hot reload
+    cmds:
+      - dotnet watch --project {{.PROJECT}} run
+
+  clean:
+    desc: Clean build outputs
+    cmds:
+      - dotnet clean {{.PROJECT}}
+
+  rebuild:
+    desc: Clean and rebuild the project
+    cmds:
+      - task: clean
+      - task: build
+
+  format:
+    desc: Format the source code
+    cmds:
+      - dotnet format {{.PROJECT}}
+
+  format-check:
+    desc: Verify source code formatting
+    cmds:
+      - dotnet format {{.PROJECT}} --verify-no-changes
+
+  check:
+    desc: Build and verify source code formatting
+    cmds:
+      - task: build
+      - task: format-check
+
+  publish:
+    desc: Publish a Release build
+    cmds:
+      - dotnet publish {{.PROJECT}} --configuration Release --output artifacts/publish
