@@ -1,1112 +1,1093 @@
-# Checklist — Casos de uso
+# Checklist — Use Cases
 
-## Objetivo
+## Purpose
 
-Este documento define o que os usuários e o sistema podem fazer. Ele descreve comportamento e regras de negócio, sem determinar telas, endpoints ou detalhes de implementação.
+This document defines what users and the system can do. It describes behavior and business rules without prescribing screens, endpoints, or implementation details.
 
-## Atores
+## Actors
 
-- **Owner:** possui controle total da organização, inclusive sobre administradores e configurações gerais.
-- **Admin:** administra pessoas, estrutura, processos e operação da organização, exceto ações exclusivas do Owner.
-- **Manager:** gerencia sua equipe e os processos dos setores aos quais está associado.
-- **Operator:** executa os checklists atribuídos a ele, ao seu setor ou ao seu turno.
-- **System:** executa agendamentos, validações, escaladas, notificações e registros automáticos.
+- **Owner:** has full control of the organization, including administrator and organization settings.
+- **Admin:** manages people, structure, processes, and operations, except for Owner-only actions.
+- **Manager:** manages their team and the processes of their assigned sectors.
+- **Operator:** executes checklists assigned to them, their sectors, or their shifts.
+- **System:** performs scheduling, validations, escalations, notifications, and automatic records.
 
-## Visão geral de acesso
+## Access Overview
 
-| Capacidade | Owner | Admin | Manager | Operator |
+| Capability | Owner | Admin | Manager | Operator |
 |---|:---:|:---:|:---:|:---:|
-| Gerenciar a organização | Sim | Parcial | Não | Não |
-| Gerenciar administradores | Sim | Não | Não | Não |
-| Gerenciar managers e operators | Sim | Sim | Apenas sua equipe | Não |
-| Gerenciar setores e turnos | Sim | Sim | Nos seus setores | Não |
-| Criar checklists | Sim | Sim | Sim, com aprovação | Não |
-| Aprovar e publicar checklists | Sim | Sim | Não | Não |
-| Executar checklists | Se atribuído | Se atribuído | Se atribuído | Sim, se atribuído |
-| Verificar execuções | Sim | Sim | Nos seus setores | Não |
-| Ver dashboards e relatórios | Todos os dados | Todos os dados | Seus setores | Próprios registros |
+| Manage the organization | Yes | Partially | No | No |
+| Manage administrators | Yes | No | No | No |
+| Manage managers and operators | Yes | Yes | Own team only | No |
+| Manage sectors and shifts | Yes | Yes | Assigned sectors | No |
+| Create checklists | Yes | Yes | Yes, with approval | No |
+| Approve and publish checklists | Yes | Yes | No | No |
+| Execute checklists | If assigned | If assigned | If assigned | If assigned |
+| Review executions | Yes | Yes | Assigned sectors | No |
+| View dashboards and reports | All data | All data | Assigned sectors | Own records |
 
-As permissões sempre respeitam a organização, os setores e os turnos do membro. Possuir um papel não concede acesso a dados de outra organização.
+Permissions always respect the member's organization, sectors, and shifts. A role never grants access to another organization's data.
 
-## 1. Autenticação e acesso
+## 1. Authentication and Access
 
-### UC-AUTH-01 — Criar conta e organização
+### UC-AUTH-01 — Create an Account and Organization
 
-**Atores:** Owner.
+**Actors:** Owner.
 
-**Objetivo:** cadastrar a primeira conta e criar uma organização.
+**Goal:** Register the first account and create an organization.
 
-**Regras:**
+**Rules:**
 
-- O usuário criador torna-se Owner da organização.
-- O sistema gera um código de acesso único para a organização.
-- A organização deve possuir ao menos um Owner ativo.
-- A localização da organização é opcional.
+- The creator becomes the organization's Owner.
+- The system generates a unique organization access code.
+- The organization must always have at least one active Owner.
+- The organization location is optional.
 
-### UC-AUTH-02 — Enviar convite para a organização
+### UC-AUTH-02 — Send an Organization Invitation
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** enviar um link para facilitar o ingresso de uma pessoa na organização.
+**Goal:** Send a link that simplifies joining the organization.
 
-**Regras:**
+**Rules:**
 
-- O convite define previamente e-mail, organização e papel.
-- Owner pode convidar Admin, Manager e Operator.
-- Admin pode convidar Manager e Operator.
-- O link possui token de uso único, prazo de validade e opção de cancelamento.
-- O token original não é armazenado no banco de dados.
-- Reenviar um convite invalida ou substitui o convite anterior ainda pendente.
+- The invitation defines the email, organization, and role in advance.
+- Owner may invite Admin, Manager, and Operator; Admin may invite Manager and Operator.
+- The link has a single-use token, an expiration time, and may be revoked.
+- Only the token hash is stored. Resending replaces or invalidates the previous pending invitation.
 
-### UC-AUTH-03 — Aceitar convite
+### UC-AUTH-03 — Accept an Invitation
 
-**Atores:** pessoa convidada.
+**Actors:** Invited person.
 
-**Objetivo:** entrar na organização por meio do link recebido.
+**Goal:** Join the organization through the received link.
 
-**Regras:**
+**Rules:**
 
-- O convite deve estar válido, não utilizado e não revogado.
-- O usuário pode criar uma conta ou entrar em uma conta existente.
-- A conta autenticada deve possuir o mesmo e-mail do convite.
-- O papel definido no convite não pode ser alterado pelo convidado.
-- Após a aceitação, o convite não pode ser reutilizado.
+- The invitation must be valid, unused, and not revoked.
+- The person may create an account or sign in to an existing one.
+- The authenticated account must use the invitation email.
+- The invited role cannot be changed by the recipient, and the invitation cannot be reused.
 
-### UC-AUTH-04 — Criar conta usando o código da organização
+### UC-AUTH-04 — Create an Account with an Organization Code
 
-**Atores:** Admin, Manager ou Operator.
+**Actors:** Admin, Manager, or Operator.
 
-**Objetivo:** criar uma conta vinculada a uma organização existente sem convite direto.
+**Goal:** Create an account associated with an existing organization without a direct invitation.
 
-**Regras:**
+**Rules:**
 
-- O código deve identificar uma organização ativa.
-- O código não autentica o usuário e não concede permissões sozinho.
-- O papel e o acesso devem ser definidos ou aprovados por Owner ou Admin.
-- Um usuário pode participar de mais de uma organização com papéis diferentes.
+- The code must identify an active organization.
+- The code does not authenticate the user or grant permissions.
+- Owner or Admin must define or approve the member's role and access.
+- A user may belong to multiple organizations with different roles.
 
-### UC-AUTH-05 — Criar conta com e-mail e senha
+### UC-AUTH-05 — Create an Account with Email and Password
 
-**Atores:** todos os usuários.
+**Actors:** All users.
 
-**Objetivo:** criar uma conta utilizando credenciais próprias do sistema.
+**Goal:** Create an account using application credentials.
 
-**Regras:**
+**Rules:**
 
-- O e-mail deve ser único e possuir formato válido.
-- A senha deve respeitar a política de segurança vigente.
-- O sistema envia um link de confirmação para o e-mail informado.
-- A conta não pode acessar o sistema até que o e-mail seja confirmado.
-- O link de confirmação deve ser temporário e não pode confirmar a conta mais de uma vez.
+- The email must be unique and valid, and the password must meet the security policy.
+- The system sends a confirmation link to the provided email.
+- The account cannot access the system until the email is confirmed.
+- The confirmation link is temporary and cannot confirm the account more than once.
 
-### UC-AUTH-06 — Confirmar e-mail
+### UC-AUTH-06 — Confirm Email
 
-**Atores:** usuário cadastrado com e-mail e senha.
+**Actors:** User registered with email and password.
 
-**Objetivo:** comprovar que o usuário controla o endereço informado.
+**Goal:** Prove control of the provided email address.
 
-**Regras:**
+**Rules:**
 
-- O link deve ser válido e estar dentro do prazo.
-- A confirmação registra a data em que o e-mail foi verificado.
-- Um link expirado pode ser reenviado.
-- Solicitar novo link invalida ou torna desnecessário o anterior.
+- The link must be valid and within its expiration period.
+- Confirmation records when the email was verified.
+- An expired link may be resent.
+- Requesting a new link invalidates or supersedes the previous one.
 
-### UC-AUTH-07 — Entrar com e-mail e senha
+### UC-AUTH-07 — Sign In with Email and Password
 
-**Atores:** usuários com credencial local.
+**Actors:** Users with local credentials.
 
-**Objetivo:** autenticar-se com e-mail e senha.
+**Goal:** Authenticate with email and password.
 
-**Regras:**
+**Rules:**
 
-- O e-mail precisa estar confirmado.
-- Somente usuários e vínculos ativos podem acessar dados da organização.
-- Tentativas inválidas são limitadas e podem bloquear temporariamente a conta.
-- Após o login, o usuário é direcionado para a experiência adequada ao seu papel.
-- O sistema registra o login e as tentativas relevantes na auditoria.
+- The email must be confirmed.
+- Only active users and active organization memberships may access organization data.
+- Invalid attempts are limited and may temporarily lock the account.
+- Login and relevant failed attempts are audited.
 
-### UC-AUTH-08 — Entrar com Google ou Apple
+### UC-AUTH-08 — Sign In with Google or Apple
 
-**Atores:** todos os usuários.
+**Actors:** All users.
 
-**Objetivo:** criar ou acessar uma conta usando SSO do Google ou da Apple.
+**Goal:** Create or access an account using Google or Apple SSO.
 
-**Regras:**
+**Rules:**
 
-- O sistema valida identidade, assinatura, emissor, audiência e validade da resposta do provedor.
-- A identidade externa é vinculada pelo identificador estável fornecido pelo provedor, não apenas pelo e-mail.
-- O e-mail só pode vincular automaticamente uma conta existente quando o provedor afirmar que ele foi verificado.
-- Uma conta criada somente por SSO não precisa possuir senha local.
-- O sistema não armazena a senha do Google ou da Apple.
-- Entrar com SSO não concede acesso automático a nenhuma organização.
+- The system validates the provider response, including signature, issuer, audience, and expiration.
+- The external identity is linked by the provider's stable subject identifier, not only by email.
+- Automatic linking by email is allowed only when the provider confirms that the email is verified.
+- An SSO-only account does not require a local password.
+- SSO never grants automatic access to an organization.
 
-### UC-AUTH-09 — Vincular Google ou Apple a uma conta existente
+### UC-AUTH-09 — Link Google or Apple to an Existing Account
 
-**Atores:** usuário autenticado.
+**Actors:** Authenticated user.
 
-**Objetivo:** adicionar uma forma alternativa de login à própria conta.
+**Goal:** Add an alternative sign-in method to the user's account.
 
-**Regras:**
+**Rules:**
 
-- O usuário deve confirmar novamente sua identidade quando necessário.
-- A mesma identidade externa não pode estar vinculada a duas contas.
-- A vinculação deve ser auditada.
+- The user must re-confirm their identity when required.
+- The same external identity cannot be linked to two accounts.
+- The provider password is never stored.
+- The link operation is audited.
 
-### UC-AUTH-10 — Usar autenticação multifator
+### UC-AUTH-10 — Use Multi-Factor Authentication
 
-**Atores:** todos os usuários.
+**Actors:** All users.
 
-**Objetivo:** proteger a conta com um segundo fator de autenticação.
+**Goal:** Protect the account with a second authentication factor.
 
-**Regras:**
+**Rules:**
 
-- O usuário pode ativar ou desativar o método após confirmar sua identidade.
-- A organização pode exigir autenticação multifator para papéis administrativos.
-- Segredos de autenticação nunca são armazenados em texto puro.
+- The user may enable or disable MFA after confirming their identity.
+- The organization may require MFA for administrative roles.
+- Authentication secrets are never stored as plain text.
 
-### UC-AUTH-11 — Recuperar acesso
+### UC-AUTH-11 — Recover Account Access
 
-**Atores:** usuários com credencial local.
+**Actors:** Users with local credentials.
 
-**Objetivo:** recuperar a conta quando a senha for esquecida.
+**Goal:** Recover access when the password is forgotten.
 
-**Regras:**
+**Rules:**
 
-- A recuperação deve usar um mecanismo temporário e de uso único.
-- A resposta não deve revelar se um e-mail está cadastrado.
-- A troca de senha pode revogar sessões anteriores por segurança.
+- Recovery uses a temporary, single-use mechanism.
+- The response must not reveal whether an email is registered.
+- A password change may revoke previous sessions.
 
-### UC-AUTH-12 — Encerrar sessão
+### UC-AUTH-12 — End a Session
 
-**Atores:** todos os usuários.
+**Actors:** All users.
 
-**Objetivo:** sair do sistema ou revogar uma sessão ativa.
+**Goal:** Sign out or revoke an active session.
 
-**Regras:**
+**Rules:**
 
-- O token de renovação da sessão deve ser revogado.
-- O usuário pode continuar conectado em outros dispositivos, salvo quando escolher encerrar todas as sessões.
+- The session refresh token is revoked.
+- Other devices remain signed in unless the user chooses to end all sessions.
 
-## 2. Organização
+## 2. Organization
 
-### UC-ORG-01 — Visualizar organização
+### UC-ORG-01 — View Organization
 
-**Atores:** todos os membros ativos.
+**Actors:** All active members.
 
-**Objetivo:** consultar os dados básicos da organização atual.
+**Goal:** View the current organization's basic information.
 
-**Regras:**
+**Rules:**
 
-- Cada usuário visualiza somente organizações às quais pertence.
-- Informações administrativas podem ser ocultadas de Manager e Operator.
+- Users may view only organizations they belong to.
+- Administrative information may be hidden from Manager and Operator.
 
-### UC-ORG-02 — Atualizar organização
+### UC-ORG-02 — Update Organization
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** alterar nome, dados legais, fuso horário e localização padrão.
+**Goal:** Change the name, legal data, time zone, and default location.
 
-**Regras:**
+**Rules:**
 
-- Alterações devem ser auditadas.
-- O fuso horário é usado nos agendamentos e registros da organização.
-- A localização é opcional e serve como padrão quando o setor não possuir localização própria.
+- Changes are audited.
+- The time zone is used for schedules and organization records.
+- The optional organization location is inherited when a sector has no location.
 
-### UC-ORG-03 — Consultar ou renovar código de acesso
+### UC-ORG-03 — View or Renew the Access Code
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** consultar ou substituir o código usado para localizar a organização no cadastro.
+**Goal:** View or replace the code used during organization onboarding.
 
-**Regras:**
+**Rules:**
 
-- O código deve ser único.
-- Renovar o código invalida o anterior.
-- O código não concede papel nem substitui autenticação ou aprovação.
+- The code must be unique, and renewing it invalidates the old code.
+- The code does not grant a role or replace authentication and approval.
 
-### UC-ORG-04 — Gerenciar administradores
+### UC-ORG-04 — Manage Administrators
 
-**Atores:** Owner.
+**Actors:** Owner.
 
-**Objetivo:** conceder ou remover o papel de Admin.
+**Goal:** Grant or remove the Admin role.
 
-**Regras:**
+**Rules:**
 
-- Admin não pode promover outro usuário a Owner ou Admin.
-- A organização deve manter ao menos um Owner ativo.
-- Toda alteração de papel deve ser auditada.
+- Admin cannot promote another user to Owner or Admin.
+- The organization must retain at least one active Owner.
+- Every role change is audited.
 
-### UC-ORG-05 — Alternar organização
+### UC-ORG-05 — Switch Organization
 
-**Atores:** usuários pertencentes a mais de uma organização.
+**Actors:** Users who belong to multiple organizations.
 
-**Objetivo:** escolher em qual organização deseja trabalhar.
+**Goal:** Select the organization in which they want to work.
 
-**Regras:**
+**Rules:**
 
-- Papéis, setores, turnos e permissões são resolvidos novamente ao alternar.
-- Nenhum dado da organização anterior pode permanecer acessível fora de seu contexto.
+- Roles, sectors, shifts, and permissions are resolved again after switching.
+- Data from the previous organization must not remain accessible outside its context.
 
-## 3. Pessoas e organograma
+## 3. People and Organization Chart
 
-### UC-MEMBER-01 — Listar membros
+### UC-MEMBER-01 — List Members
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** consultar pessoas da organização e seus papéis.
+**Goal:** View organization members and their roles.
 
-**Regras:**
+**Rules:**
 
-- Owner e Admin podem visualizar toda a organização.
-- Manager visualiza apenas sua equipe e os membros de seus setores.
+- Owner and Admin may view the entire organization.
+- Manager may view only their team and assigned sectors.
 
-### UC-MEMBER-02 — Adicionar ou aprovar membro
+### UC-MEMBER-02 — Add or Approve a Member
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** permitir que um usuário participe da organização e definir seu papel.
+**Goal:** Allow a user to join the organization and define their role.
 
-**Regras:**
+**Rules:**
 
-- Owner pode criar ou aprovar qualquer papel.
-- Admin pode criar ou aprovar Manager e Operator.
-- O papel escolhido pelo próprio usuário durante o cadastro não é concedido automaticamente.
-- O mesmo usuário não pode possuir dois vínculos com a mesma organização.
+- Owner may approve any role; Admin may approve Manager and Operator.
+- A role selected during self-registration is never granted automatically.
+- A user cannot have two memberships in the same organization.
 
-### UC-MEMBER-03 — Alterar papel
+### UC-MEMBER-03 — Change a Member Role
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** promover ou rebaixar um membro conforme sua responsabilidade.
+**Goal:** Promote or demote a member.
 
-**Regras:**
+**Rules:**
 
-- Apenas Owner gerencia Admin.
-- Admin gerencia Manager e Operator.
-- A alteração não pode deixar a organização sem Owner.
-- A alteração deve ser auditada.
+- Only Owner manages Admin; Admin manages Manager and Operator.
+- The change cannot leave the organization without an Owner.
+- The operation is audited.
 
-### UC-MEMBER-04 — Suspender ou reativar membro
+### UC-MEMBER-04 — Suspend or Reactivate a Member
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** bloquear ou restaurar o acesso de um membro à organização.
+**Goal:** Block or restore a member's organization access.
 
-**Regras:**
+**Rules:**
 
-- Suspensão não apaga registros históricos.
-- O membro suspenso não pode iniciar novas execuções.
-- Registros já realizados continuam associados ao membro original.
-- Admin não pode suspender Owner.
+- Suspension preserves historical records and prevents new executions.
+- Existing records remain associated with the original member.
+- Admin cannot suspend Owner.
 
-### UC-MEMBER-05 — Remover membro
+### UC-MEMBER-05 — Remove a Member
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** encerrar a participação de um usuário na organização.
+**Goal:** End a user's participation in the organization.
 
-**Regras:**
+**Rules:**
 
-- A remoção é lógica e preserva o histórico.
-- Associações futuras a setores, turnos e agendamentos devem deixar de produzir novas atribuições.
-- Owner não pode ser removido enquanto for o único Owner ativo.
+- Removal is logical and preserves history.
+- Future sector, shift, and schedule assignments stop producing work.
+- The only active Owner cannot be removed.
 
-### UC-MEMBER-06 — Definir líder direto
+### UC-MEMBER-06 — Set a Direct Supervisor
 
-**Atores:** Owner, Admin e Manager dentro de sua equipe.
+**Actors:** Owner, Admin, and Manager within their team.
 
-**Objetivo:** configurar o organograma e a relação direta entre líder e subordinado.
+**Goal:** Configure the organization chart and direct reporting relationship.
 
-**Regras:**
+**Rules:**
 
-- Líder e subordinado devem pertencer à mesma organização.
-- Um membro não pode ser líder de si mesmo.
-- A relação não pode formar ciclos.
-- O organograma é opcional.
-- O sistema pode usar o líder direto para sugerir a cadeia de escalada.
+- Supervisor and subordinate must belong to the same organization.
+- A member cannot supervise themselves, and the relationship cannot create cycles.
+- The organization chart is optional.
+- The system may use it to suggest an escalation chain.
 
-### UC-MEMBER-07 — Visualizar organograma
+### UC-MEMBER-07 — View Organization Chart
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** visualizar a hierarquia de pessoas da organização.
+**Goal:** View the organization's people hierarchy.
 
-**Regras:**
+**Rules:**
 
-- Owner e Admin visualizam a árvore completa.
-- Manager visualiza sua equipe e o contexto necessário de seus superiores.
-- Membros sem líder definido continuam utilizáveis no sistema.
+- Owner and Admin may view the full tree.
+- Manager may view their team and the necessary supervisor context.
+- Members without a defined supervisor remain valid.
 
-## 4. Setores
+## 4. Sectors
 
-### UC-SECTOR-01 — Criar setor
+### UC-SECTOR-01 — Create a Sector
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** criar uma área operacional dentro da organização.
+**Goal:** Create an operational area in the organization.
 
-**Regras:**
+**Rules:**
 
-- O setor pode ser raiz ou filho de outro setor.
-- O setor pai deve pertencer à mesma organização.
-- A hierarquia não pode formar ciclos.
-- A localização própria é opcional.
+- A sector may be a root or a child of another sector in the same organization.
+- The hierarchy cannot contain cycles.
+- A sector-specific location is optional.
 
-### UC-SECTOR-02 — Atualizar setor
+### UC-SECTOR-02 — Update a Sector
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** alterar nome, descrição, posição hierárquica ou localização.
+**Goal:** Change the name, description, hierarchy position, or location.
 
-**Regras:**
+**Rules:**
 
-- Manager altera somente setores sob sua responsabilidade quando possuir permissão.
-- Mover o setor não pode criar ciclos.
-- Alterar a localização não modifica resultados geográficos já registrados.
+- Manager may change only sectors within their scope.
+- Moving a sector cannot create a cycle.
+- Location changes do not alter previously recorded geographic results.
 
-### UC-SECTOR-03 — Desativar ou reativar setor
+### UC-SECTOR-03 — Deactivate or Reactivate a Sector
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** retirar temporariamente um setor da operação sem apagar seu histórico.
+**Goal:** Temporarily remove a sector from operation without deleting history.
 
-**Regras:**
+**Rules:**
 
-- Setor desativado não recebe novos agendamentos ou membros.
-- Registros anteriores permanecem disponíveis.
-- A desativação de um setor com filhos deve ser tratada explicitamente pelo usuário.
+- An inactive sector receives no new schedules or members.
+- Historical records remain available.
+- Deactivating a sector with children requires an explicit decision.
 
-### UC-SECTOR-04 — Associar membro ao setor
+### UC-SECTOR-04 — Assign a Member to a Sector
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** definir em quais setores um Manager ou Operator atua.
+**Goal:** Define the sectors in which a Manager or Operator works.
 
-**Regras:**
+**Rules:**
 
-- O membro e o setor devem pertencer à mesma organização.
-- Manager associa apenas membros de sua equipe e de seus setores.
-- Um membro pode participar de vários setores.
+- Member and sector must belong to the same organization.
+- Manager may assign only members in their team and sectors.
+- A member may belong to multiple sectors.
 
-### UC-SECTOR-05 — Resolver localização efetiva
+### UC-SECTOR-05 — Resolve Effective Location
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** determinar a localização e o raio aplicáveis a uma execução.
+**Goal:** Determine the location and radius applicable to an execution.
 
-**Regras:**
+**Rules:**
 
-- O sistema usa primeiro a localização do setor da execução.
-- Na ausência dela, procura o primeiro setor ancestral com localização.
-- Na ausência de localização nos setores, usa a organização.
-- Latitude, longitude e raio são herdados como uma única configuração.
-- Se nenhuma localização estiver configurada, não há restrição geográfica.
+- Use the execution sector first, then the first configured ancestor, then the organization.
+- Latitude, longitude, and radius are inherited as one configuration.
+- If none is configured, no geographic restriction applies.
 
-## 5. Turnos
+## 5. Shifts
 
-### UC-SHIFT-01 — Criar turno
+### UC-SHIFT-01 — Create a Shift
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** criar um turno para um setor.
+**Goal:** Create a shift for a sector.
 
-**Regras:**
+**Rules:**
 
-- Todo turno pertence a um único setor.
-- O turno define horário, recorrência e período de validade.
-- Horários que atravessam a meia-noite devem ser interpretados no fuso da organização.
+- Every shift belongs to one sector.
+- The shift defines times, recurrence, and validity.
+- Overnight times are interpreted in the organization's time zone.
 
-### UC-SHIFT-02 — Atualizar turno
+### UC-SHIFT-02 — Update a Shift
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** alterar nome, horários, recorrência ou vigência.
+**Goal:** Change a shift's name, times, recurrence, or validity.
 
-**Regras:**
+**Rules:**
 
-- Alterações afetam somente atribuições futuras.
-- Registros históricos mantêm os horários com os quais foram gerados.
+- Changes affect future assignments only.
+- Historical records retain the schedule under which they were created.
 
-### UC-SHIFT-03 — Desativar ou reativar turno
+### UC-SHIFT-03 — Deactivate or Reactivate a Shift
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** retirar ou recolocar um turno na operação.
+**Goal:** Remove a shift from operation or restore it.
 
-**Regras:**
+**Rules:**
 
-- Turnos desativados não geram novas atribuições.
-- O histórico do turno permanece disponível.
+- Inactive shifts generate no new assignments.
+- Shift history remains available.
 
-### UC-SHIFT-04 — Associar membro ao turno
+### UC-SHIFT-04 — Assign a Member to a Shift
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** alocar managers e operators em um turno durante um período.
+**Goal:** Allocate managers and operators to a shift for a defined period.
 
-**Regras:**
+**Rules:**
 
-- O membro deve estar associado ao setor do turno.
-- A associação pode ter início e término.
-- Um membro pode participar de vários turnos quando não houver conflito operacional definido pela organização.
+- The member must belong to the shift's sector.
+- An assignment may have a start and end date.
+- A member may join multiple shifts unless the organization defines an operational conflict.
 
-## 6. Checklists e tarefas
+## 6. Checklists and Tasks
 
-### UC-CHECKLIST-01 — Listar checklists
+### UC-CHECKLIST-01 — List Checklists
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** consultar processos por status, setor, criador ou versão.
+**Goal:** Find processes by status, sector, creator, or version.
 
-**Regras:**
+**Rules:**
 
-- Owner e Admin consultam todos os checklists da organização.
-- Manager consulta checklists relacionados aos seus setores e os que criou.
-- Rascunhos e versões arquivadas não aparecem para Operator.
+- Owner and Admin may view all organization checklists.
+- Manager may view checklists related to their sectors and those they created.
+- Operator cannot view drafts or archived versions.
 
-### UC-CHECKLIST-02 — Criar checklist
+### UC-CHECKLIST-02 — Create a Checklist
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** criar um processo em rascunho.
+**Goal:** Create a process draft.
 
-**Regras:**
+**Rules:**
 
-- O checklist começa como `Draft`.
-- O criador deve pertencer à organização.
-- O checklist precisa de nome e ao menos uma tarefa antes da publicação.
+- A new checklist starts as Draft.
+- The creator must belong to the organization.
+- At least one task is required before publication.
 
-### UC-CHECKLIST-03 — Configurar tarefa
+### UC-CHECKLIST-03 — Configure a Task
 
-**Atores:** Owner, Admin e Manager criador.
+**Actors:** Owner, Admin, and Manager who created the draft.
 
-**Objetivo:** adicionar ou alterar uma tarefa enquanto o checklist está em rascunho.
+**Goal:** Add or update a task while the checklist is a draft.
 
-**Regras:**
+**Rules:**
 
-- A tarefa possui nome, instruções, ordem e obrigatoriedade.
-- Uma tarefa pode solicitar mais de um tipo de entrada.
-- Tipos iniciais: booleano, texto, número, seleção, foto, vídeo, data, horário, data e horário e assinatura.
-- Configurações específicas podem definir opções, valor esperado, mínimo, máximo, unidade e comportamento da observação.
-- O valor esperado é somente leitura durante a execução.
-- A tarefa pode exigir localização.
-- A tarefa pode possuir material explicativo.
+- A task has a name, instructions, order, and required status.
+- It may request multiple input types and optional location validation.
+- Configuration may define options, expected value, minimum, maximum, unit, and note behavior.
+- Expected values are read-only during execution.
+- A task may include instructional media.
 
-### UC-CHECKLIST-04 — Ordenar ou remover tarefa
+### UC-CHECKLIST-04 — Reorder or Remove a Task
 
-**Atores:** Owner, Admin e Manager criador.
+**Actors:** Owner, Admin, and Manager who created the draft.
 
-**Objetivo:** organizar o fluxo do checklist em rascunho.
+**Goal:** Organize the checklist flow.
 
-**Regras:**
+**Rules:**
 
-- A ordem deve ser única dentro do checklist.
-- Apenas checklists em rascunho podem ser alterados diretamente.
-- Remover uma tarefa de uma nova versão não altera versões publicadas anteriormente.
+- Task order is unique within a checklist.
+- Only drafts may be edited directly.
+- Removing a task from a new version does not change previous published versions.
 
-### UC-CHECKLIST-05 — Configurar níveis de escalada
+### UC-CHECKLIST-05 — Configure Escalation Levels
 
-**Atores:** Owner, Admin e Manager criador.
+**Actors:** Owner, Admin, and Manager who created the draft.
 
-**Objetivo:** definir quem será avisado e após quanto tempo uma pendência sobe de nível.
+**Goal:** Define who is notified and after how much time a pending item escalates.
 
-**Regras:**
+**Rules:**
 
-- Os níveis são ordenados e não podem se repetir.
-- Cada nível possui um responsável e um tempo de espera.
-- O organograma pode sugerir os responsáveis, mas o usuário autorizado confirma a configuração.
-- Todos os responsáveis devem pertencer à organização.
+- Levels are ordered and cannot repeat.
+- Each level has a recipient and waiting time.
+- The organization chart may suggest recipients, but an authorized user confirms them.
+- Every recipient belongs to the organization.
 
-### UC-CHECKLIST-06 — Enviar checklist para aprovação
+### UC-CHECKLIST-06 — Submit a Checklist for Approval
 
-**Atores:** Manager.
+**Actors:** Manager.
 
-**Objetivo:** solicitar a aprovação de um checklist criado ou alterado.
+**Goal:** Request approval of a created or changed checklist.
 
-**Regras:**
+**Rules:**
 
-- O checklist deve estar válido e completo.
-- O status muda de `Draft` para `PendingApproval`.
-- O checklist não pode ser executado antes da publicação.
+- The checklist must be complete and valid.
+- Its status changes from Draft to PendingApproval.
+- It cannot be executed before publication.
 
-### UC-CHECKLIST-07 — Aprovar checklist
+### UC-CHECKLIST-07 — Approve a Checklist
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** validar um checklist pendente e autorizá-lo para publicação.
+**Goal:** Validate a pending checklist and authorize publication.
 
-**Regras:**
+**Rules:**
 
-- O sistema registra aprovador e horário.
-- A aprovação deve ser auditada.
-- Owner e Admin podem publicar diretamente checklists próprios válidos.
+- The system records the approver and time.
+- Approval is audited.
+- Owner and Admin may directly publish their own valid checklists.
 
-### UC-CHECKLIST-08 — Devolver checklist para ajustes
+### UC-CHECKLIST-08 — Return a Checklist for Changes
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** retornar um checklist pendente ao criador para correções.
+**Goal:** Return a pending checklist to its creator for correction.
 
-**Regras:**
+**Rules:**
 
-- O checklist retorna para `Draft`.
-- A devolução não publica nem cria agendamentos.
-- A ação deve ser auditada.
+- The checklist returns to Draft.
+- No schedule or publication is created.
+- The action is audited.
 
-### UC-CHECKLIST-09 — Publicar checklist
+### UC-CHECKLIST-09 — Publish a Checklist
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** tornar uma versão disponível para agendamento e execução.
+**Goal:** Make a version available for scheduling and execution.
 
-**Regras:**
+**Rules:**
 
-- O checklist deve possuir ao menos uma tarefa válida.
-- A publicação registra data e responsável pela ação.
-- Uma versão publicada é imutável.
-- Apenas versões publicadas podem gerar novas execuções.
+- The checklist must contain at least one valid task.
+- Publication records its time and responsible user.
+- A published version is immutable.
+- Only published versions generate executions.
 
-### UC-CHECKLIST-10 — Criar nova versão
+### UC-CHECKLIST-10 — Create a New Version
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** alterar um processo já publicado sem modificar seu histórico.
+**Goal:** Change a published process without altering history.
 
-**Regras:**
+**Rules:**
 
-- O sistema cria um novo rascunho ligado à versão anterior.
-- Tarefas e configurações são copiadas para o novo rascunho.
-- Registros anteriores continuam apontando para a versão executada.
-- A nova versão segue o mesmo fluxo de aprovação e publicação.
+- The system creates a draft linked to the previous version.
+- Tasks and settings are copied to the new draft.
+- Existing records continue to reference the version that was executed.
+- The new version follows the approval and publication flow.
 
-### UC-CHECKLIST-11 — Arquivar checklist
+### UC-CHECKLIST-11 — Archive a Checklist
 
-**Atores:** Owner e Admin.
+**Actors:** Owner and Admin.
 
-**Objetivo:** impedir o uso futuro de uma versão sem apagar seu histórico.
+**Goal:** Prevent future use of a version without deleting history.
 
-**Regras:**
+**Rules:**
 
-- Versões arquivadas não podem gerar novos agendamentos.
-- Agendamentos ativos devem ser desativados ou migrados conscientemente.
-- Registros históricos permanecem disponíveis.
+- Archived versions cannot generate new schedules.
+- Active schedules must be consciously disabled or migrated.
+- Historical records remain available.
 
-## 7. Agendamentos e atribuições
+## 7. Schedules and Assignments
 
-### UC-SCHEDULE-01 — Criar agendamento
+### UC-SCHEDULE-01 — Create a Schedule
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** definir quando e onde um checklist publicado deve acontecer.
+**Goal:** Define when and where a published checklist occurs.
 
-**Regras:**
+**Rules:**
 
-- O agendamento pertence a um checklist publicado e a um setor.
-- O turno é opcional.
-- A frequência pode ser diária, semanal, mensal ou em data específica.
-- O horário é interpretado no fuso da organização.
-- O período de validade é obrigatório no início e opcional no fim.
+- The schedule belongs to a published checklist and sector; shift is optional.
+- Recurrence may be daily, weekly, monthly, or a specific date.
+- Time uses the organization's time zone.
+- A start date is required; an end date is optional.
 
-### UC-SCHEDULE-02 — Definir executores específicos
+### UC-SCHEDULE-02 — Define Specific Assignees
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** selecionar membros específicos para executar um agendamento.
+**Goal:** Select specific members to execute a schedule.
 
-**Regras:**
+**Rules:**
 
-- Todos os executores devem estar ativos e vinculados ao contexto permitido.
-- Quando houver executores específicos, o sistema gera uma execução para cada um.
-- Quando não houver, o sistema resolve os executores pelo setor e, quando informado, pelo turno.
+- Assignees must be active and belong to the allowed context.
+- The system generates one execution for each specific assignee.
+- Without specific assignees, members are resolved from sector and optional shift.
 
-### UC-SCHEDULE-03 — Atualizar agendamento
+### UC-SCHEDULE-03 — Update a Schedule
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** alterar horário, recorrência, vigência, turno ou executores.
+**Goal:** Change time, recurrence, validity, shift, or assignees.
 
-**Regras:**
+**Rules:**
 
-- Alterações afetam ocorrências futuras.
-- Registros já gerados não são reescritos automaticamente.
-- O checklist associado deve continuar publicado e ativo.
+- Changes affect future occurrences only.
+- Existing generated records are not rewritten automatically.
+- The related checklist must remain published and active.
 
-### UC-SCHEDULE-04 — Desativar ou reativar agendamento
+### UC-SCHEDULE-04 — Deactivate or Reactivate a Schedule
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** interromper ou retomar a geração de execuções.
+**Goal:** Stop or resume execution generation.
 
-**Regras:**
+**Rules:**
 
-- Desativar não apaga registros já gerados.
-- Reativar passa a valer para as próximas ocorrências dentro da vigência.
+- Deactivation does not delete generated records.
+- Reactivation applies to future occurrences within the validity period.
 
-### UC-SCHEDULE-05 — Gerar execuções previstas
+### UC-SCHEDULE-05 — Generate Expected Executions
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** criar os registros que representam checklists esperados para cada horário e executor.
+**Goal:** Create records for expected checklists at each time and for each assignee.
 
-**Regras:**
+**Rules:**
 
-- Cada ocorrência deve apontar para a versão publicada correta.
-- A geração deve ser idempotente e não pode duplicar uma ocorrência.
-- A execução nasce com status `Pending`.
-- O horário limite considera a tolerância configurada.
+- Each occurrence references the correct published version.
+- Generation is idempotent and cannot duplicate an occurrence.
+- The execution starts as Pending.
+- Its deadline considers the configured tolerance.
 
-## 8. Execução operacional
+## 8. Operational Execution
 
-### UC-EXEC-01 — Visualizar checklists do dia
+### UC-EXEC-01 — View Today's Checklists
 
-**Atores:** qualquer membro com execução atribuída.
+**Actors:** Any member with an assigned execution.
 
-**Objetivo:** consultar checklists pendentes, em andamento, atrasados e concluídos.
+**Goal:** View pending, in-progress, overdue, and completed checklists.
 
-**Regras:**
+**Rules:**
 
-- O usuário visualiza somente execuções que pode realizar ou acompanhar.
-- Atrasados e urgentes devem ser priorizados.
-- A lista informa prazo, setor, turno, status e quantidade de tarefas.
+- Users see only executions they may perform or monitor.
+- Overdue and urgent items are prioritized.
+- The list shows deadline, sector, shift, status, and task count.
 
-### UC-EXEC-02 — Iniciar checklist
+### UC-EXEC-02 — Start a Checklist
 
-**Atores:** membro autorizado para a execução.
+**Actors:** Member authorized for the execution.
 
-**Objetivo:** iniciar o preenchimento de um checklist disponível.
+**Goal:** Begin filling an available checklist.
 
-**Regras:**
+**Rules:**
 
-- A execução deve estar disponível e não concluída ou cancelada.
-- O sistema registra executor e horário de início.
-- A localização inicial é capturada quando exigida.
-- Um usuário não pode assumir execução atribuída exclusivamente a outro sem autorização.
+- The execution must be available and not completed or cancelled.
+- The system records the executor and start time.
+- Initial location is captured when required.
+- An execution assigned exclusively to another member cannot be claimed without authorization.
 
-### UC-EXEC-03 — Responder tarefa
+### UC-EXEC-03 — Answer a Task
 
-**Atores:** executor da execução.
+**Actors:** Execution assignee.
 
-**Objetivo:** preencher as entradas exigidas por uma tarefa.
+**Goal:** Provide all inputs required by a task.
 
-**Regras:**
+**Rules:**
 
-- Os valores devem respeitar os tipos e configurações da tarefa.
-- O executor não pode alterar valor esperado, mínimo, máximo ou unidade.
-- A resposta pode combinar, por exemplo, número, foto e observação.
-- O sistema registra responsável e horário.
-- Uma tarefa obrigatória só é concluída quando todas as entradas obrigatórias estiverem válidas.
+- Values must match the task's types and configuration.
+- Expected value, minimum, maximum, and unit cannot be changed by the assignee.
+- A response may combine values such as number, photo, and note.
+- A required task completes only when all required inputs are valid.
 
-### UC-EXEC-04 — Adicionar observação
+### UC-EXEC-04 — Add a Note
 
-**Atores:** executor da execução.
+**Actors:** Execution assignee.
 
-**Objetivo:** fornecer contexto adicional sobre uma resposta.
+**Goal:** Add context to a task response.
 
-**Regras:**
+**Rules:**
 
-- A observação pode ser opcional, sempre obrigatória ou obrigatória apenas em divergência, conforme a tarefa.
-- A interface deve usar linguagem neutra e não acusatória.
+- A note may be optional, always required, or required only on divergence.
+- User-facing language is neutral and non-accusatory.
 
-### UC-EXEC-05 — Capturar foto ou vídeo
+### UC-EXEC-05 — Capture a Photo or Video
 
-**Atores:** executor da execução.
+**Actors:** Execution assignee.
 
-**Objetivo:** registrar evidência visual solicitada pela tarefa.
+**Goal:** Record visual evidence required by a task.
 
-**Regras:**
+**Rules:**
 
-- O arquivo deve pertencer à mesma organização da execução.
-- O conteúdo fica em armazenamento privado.
-- Quando a tarefa exigir evidência capturada no momento, o frontend não deve aceitar seleção da galeria.
-- O envio só é considerado válido após o arquivo estar disponível no armazenamento.
+- The file belongs to the same organization as the execution and remains private.
+- When evidence must be captured at execution time, the frontend does not accept gallery selection.
+- The response is valid only after the file is available in storage.
 
-### UC-EXEC-06 — Validar localização
+### UC-EXEC-06 — Validate Location
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** verificar se a execução ocorreu dentro da área permitida.
+**Goal:** Determine whether execution occurred inside the allowed area.
 
-**Regras:**
+**Rules:**
 
-- A validação usa a localização efetiva do setor ou da organização.
-- A coordenada capturada é preservada no registro.
-- O resultado da validação também é preservado e não muda quando a configuração futura mudar.
-- A ausência de geofence não impede a execução.
+- Validation uses the effective sector or organization location.
+- Captured coordinates and the validation result are preserved.
+- Later configuration changes do not change the historical result.
+- Missing geofence configuration does not block execution.
 
-### UC-EXEC-07 — Calcular divergência
+### UC-EXEC-07 — Calculate Divergence
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** classificar uma resposta comparando-a com a configuração da tarefa.
+**Goal:** Classify a response using task configuration.
 
-**Regras:**
+**Rules:**
 
-- O resultado pode estar dentro do esperado, diferente do esperado, abaixo do mínimo ou acima do máximo.
-- Valores abaixo do mínimo ou acima do máximo podem ser considerados críticos.
-- Divergência pode tornar observação ou evidência obrigatória.
-- Divergência crítica pode iniciar escalada imediatamente.
-- O sistema utiliza o termo “divergência”, nunca “erro” ou “desvio”, na comunicação operacional.
+- Results may be within expected, different from expected, below minimum, or above maximum.
+- Below-minimum and above-maximum results may be critical.
+- Divergence may require a note or evidence.
+- Critical divergence may trigger immediate escalation.
+- Operational language uses “divergence,” “different from expected,” or “outside the expected range,” not blame-oriented wording.
 
-### UC-EXEC-08 — Concluir checklist
+### UC-EXEC-08 — Complete a Checklist
 
-**Atores:** executor da execução.
+**Actors:** Execution assignee.
 
-**Objetivo:** entregar o checklist preenchido.
+**Goal:** Submit a completed checklist.
 
-**Regras:**
+**Rules:**
 
-- Todas as tarefas obrigatórias devem estar válidas.
-- O sistema registra executor, horário e localização final quando exigida.
-- O status será `Completed` ou `CompletedWithIssues`, conforme as divergências.
-- Após a conclusão, respostas não podem ser alteradas livremente.
-- A conclusão disponibiliza a execução para verificação quando aplicável.
+- Every required task must be valid.
+- The system records the executor, completion time, and final location when required.
+- Status becomes Completed or CompletedWithIssues.
+- Submitted responses cannot be freely edited.
+- The execution becomes available for review when applicable.
 
-### UC-EXEC-09 — Marcar execução como perdida
+### UC-EXEC-09 — Mark an Execution as Missed
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** identificar checklists não concluídos dentro do prazo aplicável.
+**Goal:** Identify checklists not completed within the applicable deadline.
 
-**Regras:**
+**Rules:**
 
-- O sistema considera horário previsto, tolerância e estado atual.
-- O registro passa para `Missed` quando não puder mais ser entregue conforme a regra do processo.
-- O atraso ou perda pode iniciar escalada e notificação.
+- The system considers scheduled time, tolerance, and current status.
+- The record becomes Missed when the process can no longer be submitted under its rule.
+- Delay or missed execution may trigger escalation and notification.
 
-### UC-EXEC-10 — Cancelar execução
+### UC-EXEC-10 — Cancel an Execution
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** cancelar uma ocorrência que não deve mais ser executada.
+**Goal:** Cancel an occurrence that should no longer be executed.
 
-**Regras:**
+**Rules:**
 
-- Apenas execuções não concluídas podem ser canceladas.
-- O cancelamento deve ser auditado.
-- Cancelar uma ocorrência não desativa o agendamento inteiro.
+- Only incomplete executions may be cancelled.
+- Cancellation is audited.
+- Cancelling one occurrence does not disable the schedule.
 
-## 9. Verificação
+## 9. Review
 
-### UC-REVIEW-01 — Visualizar fila de verificação
+### UC-REVIEW-01 — View the Review Queue
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** consultar execuções e tarefas que aguardam conferência.
+**Goal:** View executions and tasks awaiting review.
 
-**Regras:**
+**Rules:**
 
-- Manager visualiza apenas seus setores e sua equipe.
-- Divergências críticas e verificações atrasadas são priorizadas.
-- A fila informa executor, horário, setor, respostas e evidências.
+- Manager sees only their sectors and team.
+- Critical divergences and overdue reviews are prioritized.
+- The queue shows assignee, time, sector, responses, and evidence.
 
-### UC-REVIEW-02 — Conferir resposta
+### UC-REVIEW-02 — Inspect a Response
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** analisar valor, observação, localização e evidências de uma tarefa.
+**Goal:** Review a task's value, note, location, and evidence.
 
-**Regras:**
+**Rules:**
 
-- O verificador não altera a resposta original.
-- O sistema preserva o executor e o horário da resposta.
-- O acesso a arquivos deve respeitar organização e escopo do verificador.
+- The reviewer cannot alter the original response.
+- The original assignee and response time are preserved.
+- File access follows organization and reviewer scope.
 
-### UC-REVIEW-03 — Confirmar tarefa
+### UC-REVIEW-03 — Confirm a Task
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** registrar que uma tarefa foi verificada e aceita.
+**Goal:** Record that a task was reviewed and accepted.
 
-**Regras:**
+**Rules:**
 
-- O sistema registra verificador e horário.
-- A confirmação muda a verificação da tarefa para `Confirmed`.
-- A ação deve ser auditada.
+- The system records reviewer and time.
+- Review status becomes Confirmed.
+- The action is audited.
 
-### UC-REVIEW-04 — Escalar tarefa
+### UC-REVIEW-04 — Escalate a Task
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** encaminhar uma tarefa para o próximo responsável quando exigir atenção superior.
+**Goal:** Forward a task to the next responsible person.
 
-**Regras:**
+**Rules:**
 
-- A tarefa muda para `Escalated`.
-- O sistema registra a escalada e notifica o responsável configurado.
-- A resposta original permanece inalterada.
-- A ação deve ser auditada.
+- Review status becomes Escalated.
+- The system records the escalation and notifies the configured recipient.
+- The original response remains unchanged.
+- The action is audited.
 
-### UC-REVIEW-05 — Finalizar verificação do checklist
+### UC-REVIEW-05 — Complete Checklist Review
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** aprovar ou rejeitar a execução após revisar suas tarefas.
+**Goal:** Approve or reject an execution after reviewing its tasks.
 
-**Regras:**
+**Rules:**
 
-- O sistema registra verificador, horário, resultado e observações.
-- Uma execução pode ser aprovada quando todas as tarefas exigidas estiverem confirmadas.
-- Tarefas escaladas impedem aprovação final enquanto permanecerem pendentes de tratamento.
+- The system records reviewer, time, result, and notes.
+- Approval requires every applicable task to be confirmed.
+- Escalated tasks block final approval while unresolved.
 
-## 10. Escaladas
+## 10. Escalations
 
-### UC-ESC-01 — Escalar por atraso na entrega
+### UC-ESC-01 — Escalate Late Submission
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** avisar os responsáveis quando uma execução não for concluída no prazo.
+**Goal:** Alert responsible people when an execution is not completed on time.
 
-**Regras:**
+**Rules:**
 
-- O primeiro aviso pode ser direcionado ao executor.
-- Os níveis seguintes respeitam a ordem e o tempo configurados.
-- Cada nível é registrado uma única vez por ocorrência.
+- The first alert may go to the assignee.
+- Later levels follow the configured order and timing.
+- Each level is recorded only once per occurrence.
 
-### UC-ESC-02 — Escalar por atraso na verificação
+### UC-ESC-02 — Escalate Late Review
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** avisar responsáveis quando uma execução entregue não for verificada no prazo.
+**Goal:** Alert responsible people when a submitted execution is not reviewed on time.
 
-**Regras:**
+**Rules:**
 
-- A cadeia configurada determina destinatários e intervalos.
-- A escalada é interrompida quando a verificação necessária é concluída.
-- Cada disparo deve ser registrado.
+- The configured chain determines recipients and intervals.
+- Escalation stops when the required review is completed.
+- Every trigger is recorded.
 
-### UC-ESC-03 — Escalar divergência crítica
+### UC-ESC-03 — Escalate Critical Divergence
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** alertar imediatamente sobre valores abaixo do mínimo, acima do máximo ou outra condição crítica.
+**Goal:** Immediately alert responsible people about a critical result.
 
-**Regras:**
+**Rules:**
 
-- O alerta crítico não precisa aguardar o prazo normal do nível.
-- A divergência e a tarefa de origem devem ser identificáveis.
-- O destinatário recebe notificação interna e, quando configurado, e-mail.
+- A critical alert does not need to wait for the normal level delay.
+- The source task and divergence remain identifiable.
+- The recipient receives an in-app notification and, when configured, email.
 
-### UC-ESC-04 — Consultar histórico de escaladas
+### UC-ESC-04 — View Escalation History
 
-**Atores:** Owner, Admin e Manager autorizado.
+**Actors:** Owner, Admin, and authorized Manager.
 
-**Objetivo:** acompanhar quando, por que e para quem uma pendência foi escalada.
+**Goal:** View when, why, and to whom an item was escalated.
 
-**Regras:**
+**Rules:**
 
-- Manager consulta somente escaladas de seus setores.
-- O histórico não é substituído por logs técnicos.
-- Escaladas alimentam indicadores operacionais.
+- Manager sees only escalations from their sectors.
+- Business escalation history is not replaced by technical logs.
+- Escalation records feed operational metrics.
 
-## 11. Notificações
+## 11. Notifications
 
-### UC-NOTIFY-01 — Receber notificação
+### UC-NOTIFY-01 — Receive a Notification
 
-**Atores:** todos os membros ativos.
+**Actors:** All active members.
 
-**Objetivo:** ser informado sobre atribuições, atrasos, divergências, verificações e eventos do sistema.
+**Goal:** Be informed about assignments, delays, divergences, reviews, and system events.
 
-**Regras:**
+**Rules:**
 
-- A notificação pertence a um único membro e organização.
-- Quando aplicável, a notificação referencia o registro relacionado.
-- Alertas críticos podem também ser enviados por e-mail.
+- A notification belongs to one member and organization.
+- It references the related record when applicable.
+- Critical alerts may also be sent by email.
 
-### UC-NOTIFY-02 — Consultar central de notificações
+### UC-NOTIFY-02 — View Notification Center
 
-**Atores:** todos os membros ativos.
+**Actors:** All active members.
 
-**Objetivo:** visualizar notificações próprias.
+**Goal:** View the member's own notifications.
 
-**Regras:**
+**Rules:**
 
-- O usuário visualiza apenas suas notificações.
-- A lista pode ser filtrada por alerta, checklist, divergência e sistema.
-- Não lidas são destacadas e podem ser agrupadas por período.
+- Users see only their notifications.
+- Notifications may be filtered by alert, checklist, divergence, and system.
+- Unread items are highlighted and may be grouped by period.
 
-### UC-NOTIFY-03 — Abrir notificação
+### UC-NOTIFY-03 — Open a Notification
 
-**Atores:** destinatário da notificação.
+**Actors:** Notification recipient.
 
-**Objetivo:** marcar a notificação como lida e acessar seu contexto.
+**Goal:** Mark a notification as read and open its context.
 
-**Regras:**
+**Rules:**
 
-- A referência só pode ser aberta quando o usuário possuir acesso ao recurso.
-- Abrir uma notificação registra a data de leitura.
+- The referenced resource opens only if the user is authorized to access it.
+- Opening records the read time.
 
-### UC-NOTIFY-04 — Marcar todas como lidas
+### UC-NOTIFY-04 — Mark All as Read
 
-**Atores:** todos os membros ativos.
+**Actors:** All active members.
 
-**Objetivo:** encerrar o estado de não leitura das notificações próprias.
+**Goal:** Clear the unread state of the member's notifications.
 
-**Regras:**
+**Rules:**
 
-- A ação afeta somente o usuário e a organização atuais.
-- As notificações não são apagadas.
+- The action affects only the current user and organization.
+- Notifications are not deleted.
 
-## 12. Dashboard e relatórios
+## 12. Dashboard and Reports
 
-### UC-DASH-01 — Visualizar resumo operacional
+### UC-DASH-01 — View Operational Summary
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** acompanhar execuções entregues, pendentes, atrasadas, divergentes e verificadas.
+**Goal:** Monitor completed, pending, overdue, divergent, and reviewed executions.
 
-**Regras:**
+**Rules:**
 
-- Owner e Admin visualizam toda a organização.
-- Manager visualiza apenas seus setores.
-- Os indicadores são calculados a partir dos registros operacionais.
+- Owner and Admin view the whole organization.
+- Manager views only assigned sectors.
+- Indicators are calculated from operational records.
 
-### UC-DASH-02 — Filtrar período e contexto
+### UC-DASH-02 — Filter Period and Context
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** analisar dados por período, setor, turno, checklist ou membro.
+**Goal:** Analyze data by period, sector, shift, checklist, or member.
 
-**Regras:**
+**Rules:**
 
-- Períodos iniciais incluem hoje, semana e mês.
-- Filtros nunca ampliam o acesso além do escopo do usuário.
-- Datas são apresentadas no fuso da organização.
+- Initial periods include today, week, and month.
+- Filters never expand the user's access scope.
+- Dates are displayed in the organization's time zone.
 
-### UC-DASH-03 — Consultar indicadores
+### UC-DASH-03 — View Metrics
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** acompanhar pontualidade, divergências, escaladas e aprovação.
+**Goal:** Monitor timeliness, divergences, escalations, and approval rate.
 
-**Regras:**
+**Rules:**
 
-- Os cálculos devem ser reproduzíveis a partir de `ChecklistRecord`, `TaskRecord` e `EscalationRecord`.
-- Indicadores não alteram os registros de origem.
-- A definição de cada indicador deve ser consistente em todas as telas.
+- Calculations are reproducible from ChecklistRecord, TaskRecord, and EscalationRecord.
+- Metrics do not alter source records.
+- Each metric has one consistent definition across the application.
 
-### UC-DASH-04 — Analisar atrasos e desempenho
+### UC-DASH-04 — Analyze Delays and Performance
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** identificar setores, turnos, processos e membros com atrasos ou resultados recorrentes.
+**Goal:** Identify sectors, shifts, processes, and members with recurring delays or results.
 
-**Regras:**
+**Rules:**
 
-- Comparações respeitam o mesmo período e contexto.
-- Resultados devem ser apresentados como apoio à gestão, não como alteração dos registros.
-- Manager visualiza somente pessoas sob seu escopo.
+- Comparisons use the same period and context.
+- Results support management and never rewrite operational records.
+- Manager sees only people within their scope.
 
-### UC-DASH-05 — Identificar divergências recorrentes
+### UC-DASH-05 — Identify Recurring Divergences
 
-**Atores:** Owner, Admin e Manager.
+**Actors:** Owner, Admin, and Manager.
 
-**Objetivo:** encontrar tarefas, itens ou períodos com padrões de divergência.
+**Goal:** Find tasks, items, or periods with divergence patterns.
 
-**Regras:**
+**Rules:**
 
-- A análise utiliza os valores e classificações já registrados nas tarefas.
-- Não é necessária uma entidade própria de relatório.
-- O sistema pode agrupar resultados por checklist, tarefa, setor, turno e período.
+- Analysis uses values and classifications already stored in task records.
+- No separate report entity is required.
+- Results may be grouped by checklist, task, sector, shift, and period.
 
-### UC-DASH-06 — Consultar o próprio histórico
+### UC-DASH-06 — View Own History
 
-**Atores:** Operator.
+**Actors:** Operator.
 
-**Objetivo:** consultar suas execuções concluídas e respectivos estados.
+**Goal:** View the Operator's completed executions and their states.
 
-**Regras:**
+**Rules:**
 
-- Operator visualiza apenas registros que executou ou que foram atribuídos a ele.
-- Dados de outros operadores não são exibidos.
+- Operator sees only records they executed or that were assigned to them.
+- Other operators' data is not displayed.
 
-## 13. Arquivos e evidências
+## 13. Files and Evidence
 
-### UC-FILE-01 — Enviar arquivo
+### UC-FILE-01 — Upload a File
 
-**Atores:** membros autorizados.
+**Actors:** Authorized members.
 
-**Objetivo:** adicionar instrução ou evidência a uma tarefa.
+**Goal:** Add instructions or evidence to a task.
 
-**Regras:**
+**Rules:**
 
-- O arquivo é enviado para armazenamento privado.
-- Apenas metadados e a chave do objeto ficam no banco relacional.
-- Tipo e tamanho devem ser validados antes da aceitação.
-- O arquivo deve pertencer à mesma organização do recurso relacionado.
+- The file is stored in private Object Storage; only metadata and object key remain in the database.
+- Type and size are validated before acceptance.
+- The file belongs to the same organization as the related resource.
 
-### UC-FILE-02 — Visualizar arquivo
+### UC-FILE-02 — View a File
 
-**Atores:** membros autorizados ao checklist ou registro relacionado.
+**Actors:** Members authorized for the related checklist or record.
 
-**Objetivo:** acessar uma instrução ou evidência.
+**Goal:** Access task instructions or execution evidence.
 
-**Regras:**
+**Rules:**
 
-- O sistema valida a autorização antes de liberar o conteúdo.
-- O acesso deve usar mecanismo temporário ou fluxo autenticado.
-- Arquivos não possuem endereço público permanente.
+- Authorization is checked before content is released.
+- Access uses a temporary URL or authenticated flow.
+- Files never have permanent public URLs.
 
-## 14. Auditoria e segurança
+## 14. Audit and Security
 
-### UC-AUDIT-01 — Registrar ação auditável
+### UC-AUDIT-01 — Record an Auditable Action
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** preservar evidência de ações relevantes de segurança e negócio.
+**Goal:** Preserve evidence of relevant security and business actions.
 
-**Regras:**
+**Rules:**
 
-- Devem ser auditados login, acesso negado, mudança de papel, alteração estrutural, aprovação, publicação, cancelamento, conclusão, verificação e escalada manual.
-- O registro identifica ação, usuário, entidade, organização, data, IP e correlação quando disponíveis.
-- Senhas, tokens, segredos e conteúdo sensível desnecessário não são registrados.
-- Auditoria é imutável.
+- Login, denied access, role changes, structural changes, approval, publication, cancellation, completion, review, and manual escalation are audited.
+- Records identify action, user, entity, organization, time, IP, and correlation when available.
+- Passwords, tokens, secrets, and unnecessary sensitive content are excluded.
+- Audit records are immutable.
 
-### UC-AUDIT-02 — Consultar auditoria
+### UC-AUDIT-02 — View Audit Trail
 
-**Atores:** Owner e Admin autorizado.
+**Actors:** Owner and authorized Admin.
 
-**Objetivo:** investigar alterações e ações relevantes da organização.
+**Goal:** Investigate relevant organization actions and changes.
 
-**Regras:**
+**Rules:**
 
-- A consulta nunca ultrapassa o limite da organização.
-- O acesso à auditoria também deve ser auditado quando necessário.
-- Logs técnicos não substituem registros de auditoria.
+- Queries never cross the organization boundary.
+- Audit access may itself be audited.
+- Technical logs do not replace audit records.
 
-### UC-SEC-01 — Aplicar autorização
+### UC-SEC-01 — Enforce Authorization
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** permitir cada ação somente ao usuário autorizado.
+**Goal:** Allow each action only to an authorized user.
 
-**Regras:**
+**Rules:**
 
-- A verificação considera usuário, organização, papel, setor, turno e vínculo ativo.
-- Toda operação lê e grava dados dentro da organização atual.
-- Identificadores enviados pelo cliente nunca são considerados autorização suficiente.
-- A autorização é validada no backend, independentemente da interface.
+- Authorization considers user, organization, role, sector, shift, and active membership.
+- Every operation reads and writes within the current organization.
+- Client-provided identifiers are never sufficient authorization.
+- The backend enforces authorization independently of the user interface.
 
-### UC-SEC-02 — Proteger dados e sessões
+### UC-SEC-02 — Protect Data and Sessions
 
-**Atores:** System.
+**Actors:** System.
 
-**Objetivo:** proteger credenciais, sessões, arquivos e informações organizacionais.
+**Goal:** Protect credentials, sessions, files, and organization data.
 
-**Regras:**
+**Rules:**
 
-- Senhas são armazenadas somente como hash seguro.
-- Tokens persistidos são armazenados como hash e podem ser revogados.
-- Segredos de MFA são criptografados.
-- Arquivos permanecem privados.
-- Logs não devem conter senhas, tokens ou respostas sensíveis.
+- Passwords are stored only as secure hashes.
+- Persisted tokens are hashed and revocable.
+- MFA secrets are encrypted.
+- Files remain private.
+- Logs exclude passwords, tokens, and sensitive responses.
 
-## 15. Regras gerais de experiência
+## 15. General Experience Rules
 
-- A experiência do Operator deve ser mobile-first, direta e utilizável com poucos toques.
-- Ações principais devem permanecer claras em telas pequenas.
-- Tarefas obrigatórias incompletas impedem a entrega.
-- Valores esperados são visíveis, mas nunca editáveis durante a execução.
-- A linguagem deve ser humana, simples, positiva e não acusatória.
-- Deve-se usar “divergência”, “diferente do esperado” ou “fora do padrão”, evitando “erro”, “culpa” e “desvio”.
-- Confirmações de conclusão devem informar claramente que os dados foram entregues.
+- The Operator experience is mobile-first, direct, and usable with few taps.
+- Primary actions remain clear on small screens.
+- Incomplete required tasks prevent submission.
+- Expected values are visible but never editable during execution.
+- Language is human, simple, positive, and non-accusatory.
+- Use “divergence,” “different from expected,” or “outside the expected range”; avoid blame-oriented terms.
+- Completion feedback clearly confirms that data was submitted.

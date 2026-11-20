@@ -1,44 +1,44 @@
-# Checklist — Visão de negócio
+# Checklist — Business Overview
 
-## Visão
+## Vision
 
-Checklist é uma plataforma genérica para empresas definirem, executarem e auditarem processos operacionais recorrentes. Restaurantes são o mercado inicial, mas o produto não depende desse segmento.
+Checklist is a generic platform for companies to define, execute, and audit recurring operational processes. Restaurants are the initial market, but the product does not depend on that industry.
 
-## Estrutura da empresa
+## Company Structure
 
-Uma organização possui setores hierárquicos, permitindo representar desde estruturas simples até árvores com vários níveis. Cada setor pode possuir turnos e seus próprios managers e operadores.
+An organization has hierarchical sectors, supporting anything from simple structures to trees with multiple levels. Each sector may have shifts and its own managers and operators.
 
-A organização pode definir uma localização padrão. Um setor pode usar essa localização, herdar a localização de um setor ancestral ou definir a sua própria.
+The organization may define a default location. A sector may use that location, inherit the location of an ancestor sector, or define its own.
 
-## Usuários e acesso
+## Users and Access
 
-- **Owner:** controle total da organização, inclusive gestão de administradores.
-- **Admin:** administra usuários, setores, turnos e processos da organização.
-- **Manager:** gerencia os setores aos quais está associado e acompanha suas execuções.
-- **Operator:** executa os checklists atribuídos aos seus setores e turnos.
+- **Owner:** has full control of the organization, including administrator management.
+- **Admin:** manages users, sectors, shifts, and organizational processes.
+- **Manager:** manages the sectors assigned to them and monitors their executions.
+- **Operator:** executes checklists assigned to their sectors and shifts.
 
-## Processos
+## Processes
 
-Um checklist representa um processo e contém tarefas ordenadas. Cada tarefa define instruções, horário, obrigatoriedade, tipo de entrada e, opcionalmente, exigência de localização.
+A checklist represents a process and contains ordered tasks. Each task defines instructions, schedule, required status, input types, and an optional location requirement.
 
-Os tipos de entrada iniciais incluem booleano, texto, número, seleção, foto, vídeo, data, horário e assinatura.
+Initial input types include boolean, text, number, selection, photo, video, date, time, and signature.
 
-Checklists publicados são imutáveis. Qualquer alteração produz uma nova versão, preservando o significado dos registros históricos.
+Published checklists are immutable. Any change creates a new version, preserving the meaning of historical records.
 
-## Execução e acompanhamento
+## Execution and Monitoring
 
-O agendamento determina quando, em qual setor e, opcionalmente, em qual turno ou por qual operador um checklist deve ser executado.
+A schedule determines when, in which sector, and optionally in which shift or by which operator a checklist must be executed.
 
-`ChecklistRecord` registra uma execução esperada ou realizada. `TaskRecord` registra as respostas de suas tarefas. Esses registros permitem acompanhar atrasos, não execução, conformidade, localização, revisão e evidências.
+`ChecklistRecord` stores an expected or completed execution. `TaskRecord` stores its task responses. These records support monitoring delays, missed executions, compliance, location, review, and evidence.
 
-Relatórios são produzidos a partir dos registros existentes e não constituem entidades próprias inicialmente.
+Reports are produced from existing records and are not separate entities initially.
 
-## Princípios
+## Principles
 
-- Isolamento completo dos dados de cada organização.
-- Permissões aplicadas conforme papel, setor e turno.
-- Histórico imutável dos processos publicados e executados.
-- Auditoria das ações relevantes.
-- Coleta apenas dos dados necessários.
-- Arquivos armazenados fora do banco de dados.
-- Logs e observabilidade separados dos dados de negócio.
+- Complete isolation of each organization's data.
+- Permissions enforced according to role, sector, and shift.
+- Immutable history of published and executed processes.
+- Audit trail for relevant actions.
+- Collection of only the data that is necessary.
+- Files stored outside the relational database.
+- Technical logs and observability separated from business data.

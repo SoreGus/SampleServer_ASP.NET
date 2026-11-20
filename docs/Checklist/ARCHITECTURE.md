@@ -204,18 +204,7 @@ workspace/
 
 A monorepo is optional; this layout illustrates ownership boundaries rather than requiring a specific repository strategy.
 
-## 11. Implementation Order
-
-1. Define API contracts and the first vertical business use case.
-2. Prototype a Rust use case consumed from Swift, Kotlin, and TypeScript/Wasm.
-3. Prototype one injected native capability (for example a repository), including async behavior and errors.
-4. Implement ASP.NET Core API with PostgreSQL and migrations.
-5. Containerize the API and deploy to Cloud Run.
-6. Provision dev infrastructure with Terraform, IAM, Secret Manager, registry, and monitoring.
-7. Add automated tests, CI/CD, and environment promotion.
-8. Add production hardening: backup/restore drills, alerts, budgets, access review, and load testing.
-
-## 12. Key Architectural Decisions
+## 11. Key Architectural Decisions
 
 - Native UIs remain independent; no shared UI framework is required.
 - Rust is a client-side library, not the backend implementation.
