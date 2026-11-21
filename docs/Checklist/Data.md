@@ -1,62 +1,144 @@
-# Checklist — Data Model
+# Checklist — Persisted Data
 
-## Guidelines
+## Scope
 
-The model assumes PostgreSQL for relational data and private Object Storage for photos, videos, and documents. Complete input and output models belong to the backend and frontend; the database stores only what is required for consistency, history, and queries.
+This document defines data persisted by the Checklist product. PostgreSQL stores relational state and metadata. Binary files remain outside the database: Development uses the local file system and Production uses private Google Cloud Storage.
 
-| Entity | PostgreSQL fields and types | Purpose |
+The entities are logical requirements. ASP.NET Core Identity, OpenIddict, and EF Core may use framework-specific physical tables, but they must not create duplicate authoritative records.
+
+Technical logs, metrics, and traces are not application data and remain in the observability platform. Reports are queries over existing records unless saved reports become a future requirement.
+
+## Conventions
+
+- Primary keys are UUIDs.
+- Technical timestamps use `timestamptz` and UTC; business dates and local times retain the organization's IANA time zone.
+- Every entity has `CreatedAt`; mutable entities also have `UpdatedAt` and a concurrency token.
+- Every organization-owned entity includes `OrganizationId`. Composite foreign keys and unique constraints preserve the tenant boundary in the database.
+- Status and type names below are logical enums. Unknown persisted values must never be silently accepted.
+- `jsonb` is used only for validated structures whose shape varies by configured input or event type. Every stored document carries a schema version.
+- Passwords, usable tokens, recovery codes, secrets, and payment instruments are never stored in plaintext.
+
+## Identity and Access
+
+ASP.NET Core Identity owns users, credentials, confirmation, recovery, lockout, and identity security state. OpenIddict owns protocol registrations, authorizations, scopes, grants, and token metadata.
+
+| Entity | Required data | Purpose |
 |---|---|---|
-| `User` | `Id uuid PK`<br>`Name varchar(150) NOT NULL`<br>`Email varchar(255) NOT NULL UNIQUE`<br>`EmailConfirmedAt timestamptz NULL`<br>`Phone varchar(30) NULL`<br>`PasswordHash varchar(500) NULL`<br>`MfaEnabled boolean NOT NULL DEFAULT false`<br>`MfaSecretEncrypted text NULL`<br>`Status smallint NOT NULL` — `Active, Blocked, Disabled`<br>`FailedLoginAttempts integer NOT NULL DEFAULT 0`<br>`LockedUntil timestamptz NULL`<br>`LastLoginAt timestamptz NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL` | Global identity. `PasswordHash` is optional because an account may use only Google or Apple. Password-based accounts must confirm their email before access. |
-| `ExternalIdentity` | `Id uuid PK`<br>`UserId uuid NOT NULL FK User`<br>`Provider smallint NOT NULL` — `Google, Apple`<br>`ProviderSubject varchar(255) NOT NULL`<br>`ProviderEmail varchar(255) NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`LastLoginAt timestamptz NULL`<br>`UNIQUE (Provider, ProviderSubject)` | Links the local account to an identity confirmed by an SSO provider. Provider passwords are never stored. |
-| `RefreshToken` | `Id uuid PK`<br>`UserId uuid NOT NULL FK User`<br>`TokenHash varchar(128) NOT NULL UNIQUE`<br>`ExpiresAt timestamptz NOT NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`RevokedAt timestamptz NULL` | Renewable session for web and mobile applications. Only the token hash is persisted. |
-| `Organization` | `Id uuid PK`<br>`Name varchar(160) NOT NULL`<br>`LegalName varchar(200) NULL`<br>`TaxId varchar(30) NULL`<br>`AccessCode varchar(20) NOT NULL UNIQUE`<br>`TimeZone varchar(100) NOT NULL`<br>`Latitude numeric(9,6) NULL`<br>`Longitude numeric(9,6) NULL`<br>`AllowedRadiusMeters integer NULL`<br>`Status smallint NOT NULL` — `Active, Suspended, Disabled`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL` | Company that owns the data and defines the tenant boundary. The code identifies the organization during team onboarding, and its location is the default for sectors. |
-| `OrganizationMember` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`UserId uuid NOT NULL FK User`<br>`SupervisorMemberId uuid NULL FK OrganizationMember`<br>`Role smallint NOT NULL` — `Owner, Admin, Manager, Operator`<br>`Status smallint NOT NULL` — `Active, Suspended, Removed`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL`<br>`UNIQUE (OrganizationId, UserId)` | Links a user to a company, defines their role, and records their direct supervisor in the organization chart. Owner and Admin have organization-wide access; Manager and Operator are limited by their sector associations. |
-| `OrganizationInvitation` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`Email varchar(255) NOT NULL`<br>`Role smallint NOT NULL` — `Admin, Manager, Operator`<br>`InvitedByMemberId uuid NOT NULL FK OrganizationMember`<br>`TokenHash varchar(128) NOT NULL UNIQUE`<br>`ExpiresAt timestamptz NOT NULL`<br>`AcceptedAt timestamptz NULL`<br>`RevokedAt timestamptz NULL`<br>`CreatedAt timestamptz NOT NULL` | Link invitation to join an organization with a predefined role. The token is stored as a hash, expires, and can be accepted only once. |
-| `Sector` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ParentSectorId uuid NULL FK Sector`<br>`Name varchar(160) NOT NULL`<br>`Description text NULL`<br>`Latitude numeric(9,6) NULL`<br>`Longitude numeric(9,6) NULL`<br>`AllowedRadiusMeters integer NULL`<br>`IsActive boolean NOT NULL DEFAULT true`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL` | Hierarchical sector. Its optional location overrides the inherited location. |
-| `SectorMember` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`SectorId uuid NOT NULL FK Sector`<br>`MemberId uuid NOT NULL FK OrganizationMember`<br>`CreatedAt timestamptz NOT NULL`<br>`UNIQUE (SectorId, MemberId)` | Links managers and operators to sectors. A member may participate in multiple sectors. |
-| `Shift` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`SectorId uuid NOT NULL FK Sector`<br>`Name varchar(120) NOT NULL`<br>`StartTime time NOT NULL`<br>`EndTime time NOT NULL`<br>`ScheduleType smallint NOT NULL` — `Weekly, Monthly, SpecificDate`<br>`DaysOfWeek smallint[] NULL` — values from `0` to `6`<br>`DaysOfMonth smallint[] NULL` — values from `1` to `31`<br>`SpecificDate date NULL`<br>`ValidFrom date NULL`<br>`ValidUntil date NULL`<br>`IsActive boolean NOT NULL DEFAULT true`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL` | Shift and its schedule. A new row may represent another schedule rule when necessary. |
-| `ShiftMember` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ShiftId uuid NOT NULL FK Shift`<br>`MemberId uuid NOT NULL FK OrganizationMember`<br>`ValidFrom date NULL`<br>`ValidUntil date NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`UNIQUE (ShiftId, MemberId)` | Links managers and operators to shifts for a defined period. |
-| `Checklist` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`PreviousVersionId uuid NULL FK Checklist`<br>`Name varchar(180) NOT NULL`<br>`Description text NULL`<br>`VersionNumber integer NOT NULL DEFAULT 1`<br>`Status smallint NOT NULL` — `Draft, PendingApproval, Published, Archived`<br>`CreatedByMemberId uuid NOT NULL FK OrganizationMember`<br>`ApprovedByMemberId uuid NULL FK OrganizationMember`<br>`ApprovedAt timestamptz NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`PublishedAt timestamptz NULL` | Versioned process definition. Checklists created by managers may wait for approval. A published version is immutable; changes create another checklist linked to the previous version. |
-| `Task` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ChecklistId uuid NOT NULL FK Checklist`<br>`Name varchar(180) NOT NULL`<br>`Description text NULL`<br>`Instructions text NULL`<br>`InstructionFileId uuid NULL FK FileAsset`<br>`InputTypes smallint[] NOT NULL` — combinations of `Boolean, Text, Number, SingleChoice, MultipleChoice, Photo, Video, Date, Time, DateTime, Signature`<br>`Configuration jsonb NULL`<br>`ScheduledTime time NULL`<br>`IsRequired boolean NOT NULL DEFAULT true`<br>`RequiresLocation boolean NOT NULL DEFAULT false`<br>`SortOrder integer NOT NULL`<br>`CreatedAt timestamptz NOT NULL` | Checklist step. It may request multiple inputs, such as a measurement, photo, and note. `Configuration` contains options, expected value, minimum, maximum, unit, and other type-specific rules. |
-| `ChecklistSchedule` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ChecklistId uuid NOT NULL FK Checklist`<br>`SectorId uuid NOT NULL FK Sector`<br>`ShiftId uuid NULL FK Shift`<br>`ScheduledTime time NOT NULL`<br>`ScheduleType smallint NOT NULL` — `Daily, Weekly, Monthly, SpecificDate`<br>`DaysOfWeek smallint[] NULL`<br>`DaysOfMonth smallint[] NULL`<br>`SpecificDate date NULL`<br>`ValidFrom date NOT NULL`<br>`ValidUntil date NULL`<br>`ToleranceMinutes integer NOT NULL DEFAULT 0`<br>`IsActive boolean NOT NULL DEFAULT true`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL` | Determines when and where the checklist must be executed. Specific assignees, when present, are stored in `ChecklistScheduleMember`. |
-| `ChecklistScheduleMember` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ScheduleId uuid NOT NULL FK ChecklistSchedule`<br>`MemberId uuid NOT NULL FK OrganizationMember`<br>`CreatedAt timestamptz NOT NULL`<br>`UNIQUE (ScheduleId, MemberId)` | Links a schedule to multiple specific assignees. When no rows exist, assignment may be resolved from the sector and shift. |
-| `ChecklistRecord` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ChecklistId uuid NOT NULL FK Checklist`<br>`ScheduleId uuid NULL FK ChecklistSchedule`<br>`SectorId uuid NOT NULL FK Sector`<br>`ShiftId uuid NULL FK Shift`<br>`AssignedMemberId uuid NULL FK OrganizationMember`<br>`ExecutedByMemberId uuid NULL FK OrganizationMember`<br>`ScheduledFor timestamptz NULL`<br>`StartedAt timestamptz NULL`<br>`CompletedAt timestamptz NULL`<br>`Status smallint NOT NULL` — `Pending, InProgress, Completed, CompletedWithIssues, Missed, Cancelled`<br>`Latitude numeric(9,6) NULL`<br>`Longitude numeric(9,6) NULL`<br>`IsInsideAllowedArea boolean NULL`<br>`ReviewedByMemberId uuid NULL FK OrganizationMember`<br>`ReviewedAt timestamptz NULL`<br>`ReviewStatus smallint NULL` — `Approved, Rejected`<br>`ReviewNotes text NULL`<br>`ClientRequestId uuid NULL UNIQUE`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL` | Expected or completed execution. Pending records make it possible to identify delays and missed executions. |
-| `TaskRecord` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ChecklistRecordId uuid NOT NULL FK ChecklistRecord`<br>`TaskId uuid NOT NULL FK Task`<br>`ExecutedByMemberId uuid NULL FK OrganizationMember`<br>`Value jsonb NULL`<br>`Notes text NULL`<br>`Status smallint NOT NULL` — `Pending, Completed, Skipped, NotApplicable`<br>`DivergenceStatus smallint NULL` — `WithinExpected, DifferentFromExpected, BelowMinimum, AboveMaximum`<br>`Latitude numeric(9,6) NULL`<br>`Longitude numeric(9,6) NULL`<br>`CompletedAt timestamptz NULL`<br>`ReviewStatus smallint NULL` — `Pending, Confirmed, Escalated`<br>`ReviewedByMemberId uuid NULL FK OrganizationMember`<br>`ReviewedAt timestamptz NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`UpdatedAt timestamptz NOT NULL`<br>`UNIQUE (ChecklistRecordId, TaskId)` | Task response and review. `Value` is validated against `InputTypes` and `Configuration`; the divergence result is preserved as calculated at execution time. |
-| `ChecklistEscalationLevel` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ChecklistId uuid NOT NULL FK Checklist`<br>`LevelNumber smallint NOT NULL`<br>`RecipientMemberId uuid NOT NULL FK OrganizationMember`<br>`DelayMinutes integer NOT NULL`<br>`CreatedAt timestamptz NOT NULL`<br>`UNIQUE (ChecklistId, LevelNumber)` | Configures the sequence of recipients and waiting time for each escalation level. |
-| `EscalationRecord` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ChecklistRecordId uuid NOT NULL FK ChecklistRecord`<br>`TaskRecordId uuid NULL FK TaskRecord`<br>`EscalationLevelId uuid NOT NULL FK ChecklistEscalationLevel`<br>`RecipientMemberId uuid NOT NULL FK OrganizationMember`<br>`Reason smallint NOT NULL` — `LateSubmission, LateReview, CriticalDivergence`<br>`CreatedAt timestamptz NOT NULL` | Records each escalation that was actually triggered, supporting history, monitoring, and metrics without relying on technical logs. |
-| `Notification` | `Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`MemberId uuid NOT NULL FK OrganizationMember`<br>`Type smallint NOT NULL` — `Alert, Checklist, Divergence, System`<br>`Title varchar(180) NOT NULL`<br>`Message text NOT NULL`<br>`ReferenceType varchar(50) NULL`<br>`ReferenceId uuid NULL`<br>`ReadAt timestamptz NULL`<br>`EmailSentAt timestamptz NULL`<br>`CreatedAt timestamptz NOT NULL` | Maintains the notification center, read state, and reference to the related record. Email is an additional channel for the same notification. |
-| `FileAsset` | PostgreSQL:<br>`Id uuid PK`<br>`OrganizationId uuid NOT NULL FK Organization`<br>`ObjectKey varchar(500) NOT NULL UNIQUE`<br>`FileName varchar(255) NOT NULL`<br>`ContentType varchar(150) NOT NULL`<br>`SizeBytes bigint NOT NULL`<br>`CreatedByMemberId uuid NOT NULL FK OrganizationMember`<br>`CreatedAt timestamptz NOT NULL`<br><br>Object Storage:<br>binary file content | Metadata stays in the database; the file stays in private storage. Tasks and records reference the file by `Id`. |
-| `AuditLog` | `Id uuid PK`<br>`OrganizationId uuid NULL FK Organization`<br>`UserId uuid NULL FK User`<br>`Action varchar(100) NOT NULL`<br>`EntityType varchar(100) NOT NULL`<br>`EntityId uuid NULL`<br>`Data jsonb NULL`<br>`IpAddress varchar(45) NULL`<br>`CorrelationId uuid NOT NULL`<br>`CreatedAt timestamptz NOT NULL` | Immutable audit trail for authentication, access, configuration, publication, execution, and review. Secrets are not recorded. |
-| Technical logs | Not a domain entity | Structured logs are sent to a dedicated platform with timestamp, level, message, exception, correlation, organization, user, route, status, and duration. |
-| Metrics and traces | Not a domain entity | OpenTelemetry or an APM platform records latency, errors, requests, jobs, uploads, and overdue checklists. |
-| Reports | Not an entity initially | Reports are queries over existing records. Persistence is required only if users can save customized reports in the future. |
+| `User` | `Id`<br>`Name varchar(150)`<br>`Email varchar(255)`<br>`NormalizedEmail varchar(255) UNIQUE`<br>`EmailConfirmedAt timestamptz NULL`<br>`PasswordHash text NULL`<br>`Status` — `Active, Blocked, Disabled`<br>`FailedLoginAttempts integer`<br>`LockedUntil timestamptz NULL`<br>`SecurityStamp text`<br>`LastLoginAt timestamptz NULL` | Global account. `PasswordHash` is optional for an external-only account. No phone number is required. |
+| `ExternalIdentity` | `Id`<br>`UserId FK User`<br>`Provider` — `Google, Apple`<br>`ProviderSubject varchar(255)`<br>`ProviderEmail varchar(255) NULL`<br>`LastLoginAt timestamptz NULL`<br>`UNIQUE (Provider, ProviderSubject)` | Links an account by the provider's stable subject. Matching email never links accounts automatically. |
+| `UserActionToken` | `Id`<br>`UserId FK User`<br>`Type` — `EmailConfirmation, PasswordRecovery`<br>`TokenHash varchar(128) UNIQUE`<br>`ExpiresAt`<br>`UsedAt NULL`<br>`RevokedAt NULL` | Enforces temporary, single-use confirmation and recovery flows without storing usable tokens. A replacement revokes prior active tokens of the same type. |
+| `UserMfa` | `UserId PK/FK User`<br>`SecretEncrypted text NULL`<br>`EnabledAt NULL`<br>`DisabledAt NULL`<br>`LastConfirmedAt NULL` | Stores TOTP enrollment and activation state. Role requirements are evaluated from active organization memberships. |
+| `MfaRecoveryCode` | `Id`<br>`UserId FK User`<br>`CodeHash varchar(128)`<br>`UsedAt NULL`<br>`RevokedAt NULL`<br>`UNIQUE (UserId, CodeHash)` | Single-use recovery codes. Regeneration revokes every unused previous code. |
+| `UserSession` | `Id`<br>`UserId FK User`<br>`ClientType` — `Web, iOS, Android`<br>`DeviceLabel varchar(200) NULL`<br>`CreatedAt`<br>`LastSeenAt`<br>`ExpiresAt NULL`<br>`RevokedAt NULL`<br>`RevocationReason NULL` | Independently identifiable and revocable session. Web uses its protected cookie; mobile tokens belong to a session. |
+| `RefreshToken` | `Id`<br>`SessionId FK UserSession`<br>`TokenHash varchar(128) UNIQUE`<br>`ExpiresAt`<br>`ConsumedAt NULL`<br>`RevokedAt NULL`<br>`ReplacedByTokenId NULL FK RefreshToken` | Mobile refresh-token rotation and reuse detection. A detected reuse revokes the session family. |
+
+## Organizations and People
+
+| Entity | Required data | Purpose |
+|---|---|---|
+| `Organization` | `Id`<br>`Name varchar(160)`<br>`LegalName varchar(200) NULL`<br>`TaxId varchar(30) NULL`<br>`AccessCode varchar(20) UNIQUE`<br>`TimeZone varchar(100)`<br>`Latitude numeric(9,6) NULL`<br>`Longitude numeric(9,6) NULL`<br>`AllowedRadiusMeters integer NULL`<br>`Status` — `Active, Suspended, Disabled` | Tenant and default location boundary. Subscription access is stored separately. |
+| `OrganizationMember` | `Id`<br>`OrganizationId FK Organization`<br>`UserId FK User`<br>`SupervisorMemberId NULL FK OrganizationMember`<br>`Role NULL` — `Owner, Admin, Manager, Operator`<br>`Status` — `Pending, Active, Suspended, Removed`<br>`ApprovedByMemberId NULL`<br>`ApprovedAt NULL`<br>`UNIQUE (OrganizationId, UserId)` | Membership, role, pending access-code request, and organization chart. `Role` may be null only while approval is pending. |
+| `OrganizationInvitation` | `Id`<br>`OrganizationId`<br>`Email varchar(255)`<br>`NormalizedEmail varchar(255)`<br>`Role` — `Admin, Manager, Operator`<br>`InvitedByMemberId`<br>`TokenHash varchar(128) UNIQUE`<br>`ExpiresAt`<br>`AcceptedByUserId NULL`<br>`AcceptedAt NULL`<br>`RevokedAt NULL`<br>one active invitation per organization and normalized email | Single-use invitation with a predefined role. |
+| `Sector` | `Id`<br>`OrganizationId`<br>`ParentSectorId NULL`<br>`Name varchar(160)`<br>`Description text NULL`<br>`Latitude numeric(9,6) NULL`<br>`Longitude numeric(9,6) NULL`<br>`AllowedRadiusMeters integer NULL`<br>`IsActive boolean` | Hierarchical operational area with an optional location override. |
+| `SectorMember` | `Id`<br>`OrganizationId`<br>`SectorId`<br>`MemberId`<br>`UNIQUE (SectorId, MemberId)` | Associates Managers and Operators with one or more sectors. |
+| `Shift` | `Id`<br>`OrganizationId`<br>`SectorId`<br>`Name varchar(120)`<br>`StartTime time`<br>`EndTime time`<br>`ScheduleType` — `Weekly, Monthly, SpecificDate`<br>`DaysOfWeek smallint[] NULL`<br>`DaysOfMonth smallint[] NULL`<br>`SpecificDate date NULL`<br>`ValidFrom date NULL`<br>`ValidUntil date NULL`<br>`IsActive boolean` | Sector shift, recurrence, and validity. Overnight interpretation uses the organization time zone. |
+| `ShiftMember` | `Id`<br>`OrganizationId`<br>`ShiftId`<br>`MemberId`<br>`ValidFrom date`<br>`ValidUntil date NULL`<br>`UNIQUE (ShiftId, MemberId, ValidFrom)` | Effective-dated assignment of a sector member to a shift. An omitted start in the user flow is persisted as the effective assignment date. |
+
+## Checklist Definitions and Scheduling
+
+| Entity | Required data | Purpose |
+|---|---|---|
+| `Checklist` | `Id`<br>`OrganizationId`<br>`FamilyId uuid`<br>`PreviousVersionId NULL`<br>`Name varchar(180)`<br>`Description text NULL`<br>`VersionNumber integer`<br>`Status` — `Draft, PendingApproval, Published, Archived`<br>`CreatedByMemberId`<br>`ApprovedByMemberId NULL`<br>`ApprovedAt NULL`<br>`PublishedAt NULL`<br>`UNIQUE (OrganizationId, FamilyId, VersionNumber)` | Immutable published process version. A change creates a linked draft in the same family. |
+| `Task` | `Id`<br>`OrganizationId`<br>`ChecklistId`<br>`Name varchar(180)`<br>`Description text NULL`<br>`Instructions text NULL`<br>`InputTypes smallint[]` — `Boolean, Text, Number, SingleChoice, MultipleChoice, Photo, Video, Date, Time, Signature`<br>`Configuration jsonb NULL`<br>`ScheduledTime time NULL`<br>`IsRequired boolean`<br>`RequiresLocation boolean`<br>`SortOrder integer`<br>`UNIQUE (ChecklistId, SortOrder)` | Ordered step and its validated input configuration. Expected values are part of the immutable published version. |
+| `TaskInstructionFile` | `Id`<br>`OrganizationId`<br>`TaskId`<br>`FileAssetId`<br>`SortOrder integer`<br>`UNIQUE (TaskId, FileAssetId)` | Connects private instructional media to a task with referential integrity. |
+| `ChecklistSchedule` | `Id`<br>`OrganizationId`<br>`ChecklistId`<br>`SectorId`<br>`ShiftId NULL`<br>`ScheduledTime time`<br>`ScheduleType` — `Daily, Weekly, Monthly, SpecificDate`<br>`DaysOfWeek smallint[] NULL`<br>`DaysOfMonth smallint[] NULL`<br>`SpecificDate date NULL`<br>`ValidFrom date`<br>`ValidUntil date NULL`<br>`ToleranceMinutes integer`<br>`IsActive boolean` | Defines future occurrences for a published checklist. |
+| `ChecklistScheduleMember` | `Id`<br>`OrganizationId`<br>`ScheduleId`<br>`MemberId`<br>`UNIQUE (ScheduleId, MemberId)` | Optional explicit assignees. Without rows, assignees resolve from sector and shift. |
+| `ChecklistEscalationLevel` | `Id`<br>`OrganizationId`<br>`ChecklistId`<br>`Trigger` — `LateSubmission, LateReview, CriticalDivergence`<br>`LevelNumber smallint`<br>`RecipientMemberId`<br>`DelayMinutes integer`<br>`UNIQUE (ChecklistId, Trigger, LevelNumber)` | Ordered escalation configuration for each trigger. |
+
+## Operational Records
+
+| Entity | Required data | Purpose |
+|---|---|---|
+| `ChecklistRecord` | `Id`<br>`OrganizationId`<br>`ChecklistId`<br>`ScheduleId NULL`<br>`OccurrenceKey varchar(200)`<br>`SectorId`<br>`ShiftId NULL`<br>`AssignedMemberId NULL`<br>`ExecutedByMemberId NULL`<br>`ScheduledFor NULL`<br>`DueAt NULL`<br>`ScheduleSnapshot jsonb NULL`<br>`StartedAt NULL`<br>`CompletedAt NULL`<br>`AcceptedAt NULL`<br>`Status` — `Pending, InProgress, Completed, CompletedWithIssues, Missed, Cancelled`<br>`Latitude NULL`<br>`Longitude NULL`<br>`LocationRuleSnapshot jsonb NULL`<br>`IsInsideAllowedArea NULL`<br>`CancelledByMemberId NULL`<br>`CancelledAt NULL`<br>`ReviewedByMemberId NULL`<br>`ReviewDueAt NULL`<br>`ReviewedAt NULL`<br>`ReviewStatus NULL` — `Pending, Approved, Rejected`<br>`ReviewNotes NULL`<br>`UNIQUE (OrganizationId, OccurrenceKey)` | Expected execution, immutable scheduling context, completion, location result, cancellation, and final review. |
+| `TaskRecord` | `Id`<br>`OrganizationId`<br>`ChecklistRecordId`<br>`TaskId`<br>`ExecutedByMemberId NULL`<br>`Value jsonb NULL`<br>`Notes text NULL`<br>`Status` — `Pending, Completed, Skipped, NotApplicable`<br>`DivergenceStatus NULL` — `WithinExpected, DifferentFromExpected, BelowMinimum, AboveMaximum`<br>`Latitude NULL`<br>`Longitude NULL`<br>`OccurredAt NULL`<br>`ReceivedAt NULL`<br>`ReviewStatus NULL` — `Pending, Confirmed, Escalated`<br>`ReviewedByMemberId NULL`<br>`ReviewedAt NULL`<br>`UNIQUE (ChecklistRecordId, TaskId)` | Validated response and review. Device occurrence and server receipt times remain distinct. |
+| `TaskRecordFile` | `Id`<br>`OrganizationId`<br>`TaskRecordId`<br>`FileAssetId`<br>`InputKey varchar(100) NULL`<br>`UNIQUE (TaskRecordId, FileAssetId)` | Evidence attached to a response. A dependent response is accepted only after every required file is available. |
+| `EscalationRecord` | `Id`<br>`OrganizationId`<br>`ChecklistRecordId`<br>`TaskRecordId NULL`<br>`EscalationLevelId`<br>`RecipientMemberId`<br>`Reason` — `LateSubmission, LateReview, CriticalDivergence`<br>`DeduplicationKey varchar(200) UNIQUE`<br>`TriggeredAt` | Immutable record of each escalation actually triggered. |
+| `Notification` | `Id`<br>`OrganizationId`<br>`MemberId`<br>`Type` — `Alert, Checklist, Divergence, System`<br>`Title varchar(180)`<br>`Message text`<br>`ReferenceType varchar(50) NULL`<br>`ReferenceId uuid NULL`<br>`ReadAt NULL` | In-app notification and read state. Email delivery is tracked separately. |
+
+## Files and Exports
+
+| Entity | Required data | Purpose |
+|---|---|---|
+| `FileAsset` | `Id`<br>`OrganizationId`<br>`StorageKey varchar(500) UNIQUE`<br>`OriginalFileName varchar(255)`<br>`DeclaredContentType varchar(150)`<br>`DetectedContentType varchar(150) NULL`<br>`ExpectedSizeBytes bigint NULL`<br>`SizeBytes bigint NULL`<br>`Checksum varchar(128) NULL`<br>`Status` — `Pending, Available, Rejected, Deleted`<br>`CreatedByMemberId NULL`<br>`ConfirmedAt NULL`<br>`DeletedAt NULL` | Metadata and lifecycle for a private object. Binary content remains in local storage or Cloud Storage. |
+| `DataExport` | `Id`<br>`OrganizationId`<br>`RequestedByMemberId`<br>`Status` — `Pending, Processing, Ready, Failed, Expired`<br>`FileAssetId NULL`<br>`RequestedAt`<br>`CompletedAt NULL`<br>`ExpiresAt NULL`<br>`FailureCode NULL` | Auditable organization export available to the Owner, including during restricted subscription access. |
+
+Incomplete or rejected objects never become available through `TaskInstructionFile`, `TaskRecordFile`, or `DataExport`. Abandoned objects and expired exports are removed by background processing.
+
+## Billing and Entitlements
+
+| Entity | Required data | Purpose |
+|---|---|---|
+| `BillingCustomer` | `Id`<br>`OrganizationId UNIQUE`<br>`Provider` — `Stripe`<br>`ProviderCustomerId varchar(255) UNIQUE` | Maps one organization to its provider customer without storing payment instruments. |
+| `Subscription` | `Id`<br>`OrganizationId`<br>`BillingCustomerId`<br>`ProviderSubscriptionId varchar(255) UNIQUE`<br>`ProviderPriceId varchar(255) NULL`<br>`PlanKey varchar(100) NULL`<br>`Status` — `Trialing, Active, PastDue, Canceled, Expired, Unpaid`<br>`CurrentPeriodStart NULL`<br>`CurrentPeriodEnd NULL`<br>`TrialEndsAt NULL`<br>`GraceEndsAt NULL`<br>`CancelAtPeriodEnd boolean`<br>`CanceledAt NULL`<br>`ProviderUpdatedAt NULL` | Local subscription projection. Historical subscriptions remain stored; only one may control current access. |
+| `OrganizationEntitlement` | `Id`<br>`OrganizationId`<br>`Key varchar(100)`<br>`IsGranted boolean`<br>`SourceSubscriptionId NULL`<br>`ValidFrom`<br>`ValidUntil NULL`<br>`UNIQUE (OrganizationId, Key)` | Current access projection used by authorization. Prices and entitlement definitions remain configurable business policy. |
+| `BillingEvent` | `Id`<br>`OrganizationId NULL`<br>`Provider` — `Stripe`<br>`ProviderEventId varchar(255) UNIQUE`<br>`ProviderCustomerId varchar(255) NULL`<br>`ProviderSubscriptionId varchar(255) NULL`<br>`EventType varchar(150)`<br>`PayloadHash varchar(128)`<br>`ReceivedAt`<br>`ProcessedAt NULL`<br>`Status` — `Pending, Processed, Failed`<br>`FailureCode NULL` | Verified webhook deduplication and reconciliation history. Card or payment-instrument details are not copied locally. |
+
+## Delivery, Idempotency, and Audit
+
+| Entity | Required data | Purpose |
+|---|---|---|
+| `OutboxMessage` | `Id`<br>`OrganizationId NULL`<br>`Type varchar(150)`<br>`AggregateType varchar(100) NULL`<br>`AggregateId uuid NULL`<br>`Payload jsonb`<br>`OccurredAt`<br>`AvailableAt`<br>`Attempts integer`<br>`ProcessedAt NULL`<br>`LastErrorCode NULL` | Transactional publication of background work after the owning database transaction commits. Payloads are minimized and exclude usable secrets. |
+| `IdempotencyRecord` | `Id`<br>`OrganizationId NULL`<br>`UserId NULL`<br>`PartitionKey varchar(100)`<br>`Scope varchar(100)`<br>`Key varchar(200)`<br>`RequestHash varchar(128)`<br>`Status` — `Processing, Completed, Failed`<br>`ResultReference varchar(300) NULL`<br>`ExpiresAt`<br>`UNIQUE (PartitionKey, Scope, Key)` | Prevents duplicate API, offline synchronization, task, and side-effect processing. |
+| `BackgroundExecution` | `Id`<br>`OrganizationId NULL`<br>`Operation varchar(150)`<br>`ExecutionKey varchar(200)`<br>`Status` — `Running, Succeeded, Failed`<br>`Attempts integer`<br>`StartedAt`<br>`CompletedAt NULL`<br>`FailureCode NULL`<br>`UNIQUE (Operation, ExecutionKey)` | Persists scheduled, batch, and terminal background outcomes for controlled retry. |
+| `EmailDelivery` | `Id`<br>`OrganizationId NULL`<br>`UserId NULL`<br>`NotificationId NULL`<br>`RecipientEmail varchar(255)`<br>`TemplateName varchar(150)`<br>`TemplateVersion integer`<br>`IdempotencyKey varchar(200) UNIQUE`<br>`Status` — `Pending, Sent, Failed`<br>`Attempts integer`<br>`AcceptedAt NULL`<br>`LastErrorCode NULL` | Provider-neutral transactional email state. `Sent` means accepted by SMTP, not delivered to the recipient. |
+| `AuditLog` | `Id`<br>`OrganizationId NULL`<br>`UserId NULL`<br>`MemberId NULL`<br>`Action varchar(100)`<br>`EntityType varchar(100)`<br>`EntityId uuid NULL`<br>`Data jsonb NULL`<br>`IpAddress varchar(45) NULL`<br>`CorrelationId uuid`<br>`CreatedAt` | Append-only security and business audit trail. Secrets and unnecessary sensitive values are excluded. |
+
+## Client-Local Data
+
+iOS uses SwiftData, Android uses Room, and Web uses IndexedDB through platform adapters. Their physical schemas may differ, but they persist the same logical categories:
+
+| Local category | Required data | Purpose |
+|---|---|---|
+| `LocalContext` | User identifier, organization identifier, authorization context version, last synchronization cursor | Partitions and revalidates all local data. |
+| `CachedDefinition` | Published checklist, tasks, schedule context, and version | Makes previously synchronized operational work available offline. |
+| `LocalExecutionDraft` | Execution identifier, draft responses, notes, device timestamps, and local state | Preserves incomplete and locally completed work until backend acceptance. |
+| `PendingCommand` | Client-generated identifier, idempotency key, type, validated payload, occurred time, retry state, and dependency identifiers | Immutable offline action waiting for synchronization. |
+| `PendingFile` | Local protected-file reference, checksum, size, content type, related command, and transfer state | Protects evidence and resumes upload before its dependent command is accepted. |
+| `SyncConflict` | Command identifier, reason code, server version or rejection context, and resolution state | Presents explicit conflicts and rejections without silent overwrite. |
+
+Authentication tokens never enter these databases. Native tokens remain in Keychain or Keystore-backed storage; browser authentication remains in the protected server cookie. Local data is minimized, partitioned by user and organization, migrated explicitly, and removed or revalidated after sign-out or context changes.
 
 ## Location Inheritance
 
-The effective location is resolved in this order:
+The effective location is resolved as one indivisible latitude, longitude, and radius configuration:
 
-1. Location configured on the execution sector.
-2. Location of the first ancestor sector that has one configured.
-3. Organization location.
-4. No geographic restriction when no location is configured.
+1. Execution sector.
+2. First configured ancestor sector.
+3. Organization.
+4. No geographic restriction when none is configured.
 
-Latitude, longitude, and radius must be inherited as a single configuration. The backend must not combine coordinates from one entity with the radius from another.
-
-`ChecklistRecord` and `TaskRecord` preserve the coordinates captured during execution. `IsInsideAllowedArea` preserves the validation result calculated at that time, even if the configuration changes later.
+`ChecklistRecord` preserves the effective rule snapshot, captured coordinates, and calculated result. `TaskRecord` preserves task-level coordinates when required. Later configuration changes never rewrite historical validation.
 
 ## Persistence Rules
 
-- Every organizational data query must be scoped by `OrganizationId`.
-- `AccessCode` identifies an organization but grants no role or permission; access must be approved according to organization rules.
-- Password-based accounts may access the system only after email confirmation.
-- Google and Apple identities must be validated by the provider; external tokens are not stored unless required.
-- External accounts may be linked automatically by email only when the provider confirms that the email is verified.
-- Invitations expire, are single-use, and may be revoked before acceptance.
-- `SupervisorMemberId` must reference a member of the same organization, cannot reference itself, and cannot create cycles.
-- Published checklists and completed records preserve history and are not freely rewritten.
-- When a schedule has specific assignees, the system generates an execution for each associated member; without specific assignees, it uses the sector and shift.
-- Escalation jobs must be idempotent so the same level is not recorded or notified more than once.
-- `jsonb` values must be validated by the backend before persistence.
-- Passwords, tokens, and secrets are never stored as plain text.
-- Files are private and accessed through authorization or temporary URLs.
-- Audit records and technical logs serve different purposes.
+- Tenant-owned references must use matching `OrganizationId` values; filtering in application code is not sufficient protection.
+- A normalized email is globally unique, but a user may have one membership in each of multiple organizations.
+- An access code creates a pending membership only. It never grants a role or organization access.
+- An organization always retains at least one active Owner.
+- Privileged access requires active MFA; recovery by email never disables MFA.
+- External identities are unique by provider and subject and are linked to an existing account only after that account authenticates.
+- Invitations and user action tokens expire, are single-use, and may be revoked or superseded.
+- Supervisor relationships remain within one organization, cannot reference themselves, and cannot create cycles.
+- Sector hierarchies remain within one organization and cannot contain cycles. Sector and shift assignments accept only members from their valid organizational context.
+- Published checklist versions and accepted operational records are immutable. Corrections use new versions or explicit audited state transitions.
+- The first checklist version establishes its `FamilyId`; every later version retains that family and links to its immediate predecessor.
+- Schedules reference published checklist versions. Schedule changes affect future occurrences and never rewrite already generated records.
+- Schedule generation uses `OccurrenceKey`; retries cannot create duplicate expected executions.
+- Schedule, deadline, and location snapshots preserve the meaning of generated records after configuration changes.
+- Offline commands, webhooks, outbox dispatch, email, and escalation handlers are idempotent.
+- Mutable aggregates use optimistic concurrency; conflicts return explicit outcomes rather than overwriting newer data.
+- Storage keys are generated by the backend and never derived directly from file names. Files become referencable only after validation and confirmation. Access always requires current authorization and a temporary URL or authenticated flow.
+- Stripe remains the financial source of truth. Local subscriptions and entitlements change only after verified event processing and provider reconciliation.
+- One nonterminal subscription controls an organization's current access. Expired and unpaid organizations retain only the Owner operations defined in the use cases.
+- Audit records are append-only and remain separate from technical logs.
+- Production data is never copied directly into Development; Development uses synthetic data.

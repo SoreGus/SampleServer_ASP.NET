@@ -10,7 +10,7 @@ This document defines what users and the system can do. It describes behavior an
 - **Admin:** manages people, structure, processes, and operations, except for Owner-only actions.
 - **Manager:** manages their team and the processes of their assigned sectors.
 - **Operator:** executes checklists assigned to them, their sectors, or their shifts.
-- **System:** performs scheduling, validations, escalations, notifications, and automatic records.
+- **System:** performs scheduling, validation, synchronization, billing reconciliation, escalation, notification, and automatic record creation.
 
 ## Access Overview
 
@@ -25,8 +25,9 @@ This document defines what users and the system can do. It describes behavior an
 | Execute checklists | If assigned | If assigned | If assigned | If assigned |
 | Review executions | Yes | Yes | Assigned sectors | No |
 | View dashboards and reports | All data | All data | Assigned sectors | Own records |
+| Manage billing | Yes | View only | No | No |
 
-Permissions always respect the member's organization, sectors, and shifts. A role never grants access to another organization's data.
+Permissions always respect the member's organization, sectors, and shifts. A role never grants access to another organization's data, and a capability also requires the applicable subscription entitlement.
 
 ## 1. Authentication and Access
 
@@ -79,7 +80,8 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 - The code must identify an active organization.
 - The code does not authenticate the user or grant permissions.
-- Owner or Admin must define or approve the member's role and access.
+- The request remains pending until Owner or Admin defines or approves the member's role and access.
+- A pending request cannot access organization data.
 - A user may belong to multiple organizations with different roles.
 
 ### UC-AUTH-05 — Create an Account with Email and Password
@@ -131,7 +133,7 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 - The system validates the provider response, including signature, issuer, audience, and expiration.
 - The external identity is linked by the provider's stable subject identifier, not only by email.
-- Automatic linking by email is allowed only when the provider confirms that the email is verified.
+- When the provider email already belongs to an account, the user must authenticate with that account before linking the external identity.
 - An SSO-only account does not require a local password.
 - SSO never grants automatic access to an organization.
 
@@ -148,19 +150,36 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 - The provider password is never stored.
 - The link operation is audited.
 
-### UC-AUTH-10 — Use Multi-Factor Authentication
+### UC-AUTH-10 — Configure Multi-Factor Authentication
 
 **Actors:** All users.
 
-**Goal:** Protect the account with a second authentication factor.
+**Goal:** Protect the account with an authenticator application and recovery codes.
 
 **Rules:**
 
-- The user may enable or disable MFA after confirming their identity.
-- The organization may require MFA for administrative roles.
-- Authentication secrets are never stored as plain text.
+- MFA is required for Owner, Admin, and Manager and optional for Operator.
+- Setup uses a compatible time-based one-time-password authenticator application.
+- Activation requires confirmation with a valid authenticator code.
+- Recovery codes are shown once, are single-use, and are replaced when regenerated.
+- A user whose role requires MFA cannot disable it while retaining that role.
+- Resetting or removing MFA requires recent authentication and the current factor or a recovery code.
+- Email and SMS are not authentication factors.
 
-### UC-AUTH-11 — Recover Account Access
+### UC-AUTH-11 — Complete Multi-Factor Authentication
+
+**Actors:** Users with MFA enabled.
+
+**Goal:** Complete sign-in or confirm a sensitive action.
+
+**Rules:**
+
+- A valid authenticator code or unused recovery code is required.
+- External sign-in does not bypass MFA.
+- Sensitive actions may require a recent MFA confirmation.
+- Relevant failures and recovery-code use are audited.
+
+### UC-AUTH-12 — Recover Account Access
 
 **Actors:** Users with local credentials.
 
@@ -170,9 +189,10 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 - Recovery uses a temporary, single-use mechanism.
 - The response must not reveal whether an email is registered.
-- A password change may revoke previous sessions.
+- A password change revokes every active session.
+- Email recovery does not disable or bypass MFA.
 
-### UC-AUTH-12 — End a Session
+### UC-AUTH-13 — End a Session
 
 **Actors:** All users.
 
@@ -180,8 +200,20 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 **Rules:**
 
-- The session refresh token is revoked.
+- The current session is revoked.
 - Other devices remain signed in unless the user chooses to end all sessions.
+
+### UC-AUTH-14 — Manage Active Sessions
+
+**Actors:** Authenticated user.
+
+**Goal:** Review and revoke sessions associated with the account.
+
+**Rules:**
+
+- Sessions are independently identifiable by client or device and recent activity.
+- The user may revoke an individual session or every other session.
+- Account blocking, account recovery, or suspected compromise revokes all active sessions.
 
 ## 2. Organization
 
@@ -1012,9 +1044,11 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 **Rules:**
 
-- The file is stored in private Object Storage; only metadata and object key remain in the database.
+- The file is stored in private file storage; only metadata and its storage reference remain in the database.
 - Type and size are validated before acceptance.
 - The file belongs to the same organization as the related resource.
+- A file remains pending until its upload and validation are confirmed.
+- Invalid, incomplete, or abandoned uploads never become available as evidence or instructions.
 
 ### UC-FILE-02 — View a File
 
@@ -1028,7 +1062,120 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 - Access uses a temporary URL or authenticated flow.
 - Files never have permanent public URLs.
 
-## 14. Audit and Security
+## 14. Offline Operation and Synchronization
+
+### UC-SYNC-01 — Continue Operational Work Offline
+
+**Actors:** Members authorized to execute an assigned checklist.
+
+**Goal:** Continue an available operational execution without connectivity.
+
+**Rules:**
+
+- Only previously synchronized and authorized executions are available offline.
+- Initial sign-in and session renewal require connectivity.
+- Administrative configuration, access management, billing, and other privileged changes require connectivity.
+- Draft responses, notes, evidence, and pending actions remain protected and isolated by user and organization on the device.
+- Local completion means pending synchronization, not backend acceptance.
+
+### UC-SYNC-02 — Synchronize Pending Work
+
+**Actors:** System and the affected member.
+
+**Goal:** Submit offline actions when connectivity returns.
+
+**Rules:**
+
+- Pending actions are retried idempotently and cannot create duplicate executions or responses.
+- Evidence uploads complete before a dependent response or execution is accepted.
+- The backend revalidates current authorization, rules, and referenced versions.
+- An action is accepted only after backend confirmation.
+- Successful synchronization updates the local state without discarding unrelated pending work.
+
+### UC-SYNC-03 — Handle a Synchronization Conflict
+
+**Actors:** System and the affected member.
+
+**Goal:** Resolve work that cannot be accepted as originally captured.
+
+**Rules:**
+
+- Revoked access, changed rules, incompatible versions, or concurrent changes never cause a silent overwrite.
+- The application preserves the local action and presents an explicit accepted, rejected, or conflict state.
+- The user sees the reason and any permitted resolution or resubmission action.
+- Device event time and server receipt time remain distinguishable.
+
+## 15. Billing and Subscription Access
+
+### UC-BILL-01 — View Subscription Status
+
+**Actors:** Owner and Admin.
+
+**Goal:** View the organization's current subscription and access state.
+
+**Rules:**
+
+- Each organization has its own subscription.
+- Owner and Admin may view its status, current period, cancellation state, and available entitlements.
+- Admin has read-only billing access and cannot change payment or subscription settings.
+- When subscription access is blocked, billing information is available only to the Owner.
+- Payment instrument details are never stored or displayed by the application.
+
+### UC-BILL-02 — Start or Manage a Subscription
+
+**Actors:** Owner.
+
+**Goal:** Activate, change, cancel, reactivate, or update payment settings for the organization's subscription.
+
+**Rules:**
+
+- Checkout and subscription management use Stripe-hosted pages.
+- Returning from a hosted page does not activate access by itself.
+- Subscription access changes only after the backend verifies and reconciles the provider state.
+- Cancellation preserves paid access until the end of the current billing period.
+
+### UC-BILL-03 — Enforce Subscription Access
+
+**Actors:** System.
+
+**Goal:** Allow organization operations only while the subscription provides the required entitlement.
+
+**Rules:**
+
+- `Active` and `Trialing` subscriptions provide their configured entitlements.
+- `PastDue` subscriptions retain access during a configurable grace period.
+- `Canceled` subscriptions retain access until the end of the paid period.
+- `Expired` and `Unpaid` subscriptions block organization operations.
+- While operations are blocked, only the Owner may access billing, reactivation, and organization data export.
+- Prices, plans, entitlements, trial availability, and grace-period duration are configurable business policies.
+
+### UC-BILL-04 — Synchronize Billing State
+
+**Actors:** System.
+
+**Goal:** Keep local subscription access consistent with Stripe.
+
+**Rules:**
+
+- Signed billing events are verified, deduplicated, and processed idempotently.
+- The backend reconciles each relevant event with the current provider state before changing access.
+- Access is enforced from the local entitlement projection, not directly from browser redirects or client input.
+- Billing changes that affect access are audited.
+
+### UC-BILL-05 — Export Organization Data During Restricted Access
+
+**Actors:** Owner.
+
+**Goal:** Retrieve the organization's data when normal operations are blocked by subscription state.
+
+**Rules:**
+
+- Export remains available to the Owner for an `Expired` or `Unpaid` subscription.
+- The export contains only the organization's authorized business data and files.
+- Credentials, secrets, authentication tokens, and technical telemetry are excluded.
+- Export generation and download are audited.
+
+## 16. Audit and Security
 
 ### UC-AUDIT-01 — Record an Auditable Action
 
@@ -1038,7 +1185,7 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 **Rules:**
 
-- Login, denied access, role changes, structural changes, approval, publication, cancellation, completion, review, and manual escalation are audited.
+- Login, denied access, MFA and session changes, role changes, structural changes, billing access changes, exports, approval, publication, cancellation, completion, review, and manual escalation are audited.
 - Records identify action, user, entity, organization, time, IP, and correlation when available.
 - Passwords, tokens, secrets, and unnecessary sensitive content are excluded.
 - Audit records are immutable.
@@ -1063,7 +1210,7 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 
 **Rules:**
 
-- Authorization considers user, organization, role, sector, shift, and active membership.
+- Authorization considers user, organization, role, sector, shift, active membership, and subscription entitlement.
 - Every operation reads and writes within the current organization.
 - Client-provided identifiers are never sufficient authorization.
 - The backend enforces authorization independently of the user interface.
@@ -1082,7 +1229,7 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 - Files remain private.
 - Logs exclude passwords, tokens, and sensitive responses.
 
-## 15. General Experience Rules
+## 17. General Experience Rules
 
 - The Operator experience is mobile-first, direct, and usable with few taps.
 - Primary actions remain clear on small screens.
@@ -1091,3 +1238,4 @@ Permissions always respect the member's organization, sectors, and shifts. A rol
 - Language is human, simple, positive, and non-accusatory.
 - Use “divergence,” “different from expected,” or “outside the expected range”; avoid blame-oriented terms.
 - Completion feedback clearly confirms that data was submitted.
+- Offline and synchronization states remain visible until backend acceptance.
