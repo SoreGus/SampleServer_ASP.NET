@@ -8,11 +8,11 @@ An item is complete only when its implementation, applicable automated tests, do
 
 ## Scope Guard
 
-- [ ] Confirm `Version-0.0.1.md`, `UseCases.md`, `Data.md`, and `ARCHITECTURE.md` are the approved sources for the release.
-- [ ] Record any discovered contradiction in the relevant source document before implementing it.
-- [ ] Keep sectors, organization charts, shifts, checklists, operational files, offline synchronization, billing, and customer onboarding outside this release.
-- [ ] Do not create temporary identity, authorization, organization, notification, or audit mechanisms that later features would need to replace.
-- [ ] Keep all user-facing presentation names separate from the system role names `Owner`, `Admin`, `Manager`, and `Operator`.
+- [x] Confirm `Version-0.0.1.md`, `UseCases.md`, `Data.md`, and `ARCHITECTURE.md` are the approved sources for the release.
+- [x] Record any discovered contradiction in the relevant source document before implementing it.
+- [x] Keep sectors, organization charts, shifts, checklists, operational files, offline synchronization, billing, and customer onboarding outside this release.
+- [x] Do not create temporary identity, authorization, organization, notification, or audit mechanisms that later features would need to replace.
+- [x] Keep all user-facing presentation names separate from the system role names `Owner`, `Admin`, `Manager`, and `Operator`.
 
 ## 1. Delivery Foundation
 
